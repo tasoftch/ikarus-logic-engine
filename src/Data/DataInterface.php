@@ -34,8 +34,17 @@
 
 namespace Ikarus\Logic\Data;
 
-
+/**
+ * The data interface.
+ *
+ * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
+ *
+ * @package Ikarus\Logic\Data
+ */
 interface DataInterface
 {
-
+    /**
+     * @return resource
+     */
+    public function getData();
 }
