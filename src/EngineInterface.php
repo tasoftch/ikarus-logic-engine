@@ -52,7 +52,7 @@ interface EngineInterface
     /**
      * Binds the given data to the engine.
      *
-     * NOTE: This must be done while the engine is not yet active.
+     * NOTE: This must be done while the engine is not active or was terminated.
      *
      * @param DataInterface $data
      * @return bool
@@ -64,6 +64,13 @@ interface EngineInterface
      * NOTE: This method does not block the thread.
      */
     public function activate();
+
+    /**
+     * Returns if the engine was activated or is idling.
+     *
+     * @return bool
+     */
+    public function isActive(): bool;
 
     /**
      * Terminates the engine.
