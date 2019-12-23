@@ -32,43 +32,10 @@
  *
  */
 
-namespace Ikarus\Logic\Compiled\Model;
+namespace Ikarus\Logic\Data;
 
 
-use Ikarus\Logic\Compiled\ProjectInterface;
-
-class Project implements ProjectInterface
+interface DataInterface
 {
-    private $componentNames = [];
-    private $typeNames = [];
-    private $inputs = [];
-    private $outputs = [];
-    private $signals = [];
 
-    private $i2o, $o2i;
-
-    public function getRequiredNodeComponentNames(): array
-    {
-        return $this->componentNames;
-    }
-
-    public function getRequiredTypeNames(): array
-    {
-        return $this->typeNames;
-    }
-
-    public function getExposedInputSockets(): array
-    {
-        return $this->inputs;
-    }
-
-    public function getExposedOutputSockets(): array
-    {
-        // TODO: Implement getExposedOutputSockets() method.
-    }
-
-    public function getExposedSignalSockets(): array
-    {
-        // TODO: Implement getExposedSignalSockets() method.
-    }
 }

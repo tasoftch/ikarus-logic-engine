@@ -35,18 +35,96 @@
 namespace Ikarus\Logic;
 
 
-use Ikarus\Logic\Model\Component\ComponentInterface;
-use Ikarus\Logic\Model\Component\NodeComponentInterface;
-use Ikarus\Logic\Model\Component\Socket\Type\TypeInterface;
+use Ikarus\Logic\Data\DataInterface;
+use Ikarus\Logic\Model\Component\ComponentModelInterface;
 
 interface EngineInterface
 {
     /**
-     * The engine requires all components used in the compiled project
+     * EngineInterface constructor.
      *
-     * @return ComponentInterface[]|NodeComponentInterface[]|TypeInterface[]
+     * The engine must be informed on instantiation about the component model used.
+     *
+     * @param ComponentModelInterface $componentModel
      */
-    public function getComponents(): array;
+    public function __construct(ComponentModelInterface $componentModel);
 
+    /**
+     * Binds the given data to the engine.
+     *
+     * NOTE: This must be done while the engine is not yet active.
+     *
+     * @param DataInterface $data
+     * @return bool
+     */
+    public function bindData(DataInterface $data): bool;
 
+    /**
+     * This method activates the engine and let you ask values from the logic or trigger signals into it.
+     * NOTE: This method does not block the thread.
+     */
+    public function activate();
+
+    /**
+     * Terminates the engine.
+     * This method tears down the engine and won't accept triggers or requests anymore.
+     * It is still possible to activate it again.
+     */
+    public function terminate();
+
+    /**
+     * After activation, the engine resists in an idle mode, which means it is waiting for:
+     * - A value gets fetched
+     * - A signal gets triggered
+     *
+     * For performance reasons both events are executed in a render cycle.
+     * Node components get informed, if they already have updated a node in the same cycle
+     */
+
+    /**
+     * Begin a new render cycle
+     * The render cycles are nested. So every time this method gets called, the engine will increase the cycle count.
+     * Calling this method when the cycle count is zero, it will raise up a new cycle.
+     * PLEASE NOTE: BEGINNING AND ENDING RENDER CYCLES MUST BE EQUAL!
+     *
+     * @see EngineInterface::endRenderCycle()
+     */
+    public function beginRenderCycle();
+
+    /**
+     * Ends a render cycle.
+     * As you see above, this method reduces the cycle count.
+     * Reaching zero, the render cycle gets terminated.
+     * PLEASE NOTE: BEGINNING AND ENDING RENDER CYCLES MUST BE EQUAL!
+     *
+     * @see EngineInterface::beginRenderCycle()
+     */
+    public function endRenderCycle();
+
+    /**
+     * This method asks the logic for a value.
+     * It will search for the node with $nodeIdentifier and its exposed socket (input socket only).
+     * If an exposed input socket matches the passed $exposedSocketKey the engine starts to resolve the input value.
+     * In practice, it will cause the node component holding that socket to update.
+     * Fetching a value increases the render cycle.
+     * So if you want to fetch several values at one time, begin a render cycle before and end it after! (Much better performance)
+     *
+     * @param string|int $nodeIdentifier
+     * @param string $exposedSocketKey
+     * @param mixed ...$inputArguments
+     * @return mixed
+     */
+    public function requestValue($nodeIdentifier, string $exposedSocketKey, ...$inputArguments);
+
+    /**
+     * Calling this method triggers a signal in the logic.
+     * The signals are forward events and so every node of $componentName gets informed that a signal trigger on $exposedSocketKey (output socket) has occured.
+     * Then it will follow the connections and inform the next node components and so on.
+     * If you pass a specific node identifier, the signal gets only triggered for that node.
+     *
+     * @param string $componentName
+     * @param string $exposedSocketKey
+     * @param string|int|null $nodeIdentifier
+     */
+    public function triggerSignal(string $componentName, string $exposedSocketKey, $nodeIdentifier = NULL);
 }
