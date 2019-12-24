@@ -32,23 +32,10 @@
  *
  */
 
-namespace Ikarus\Logic\Data;
+namespace Ikarus\Logic\Context;
 
-use Ikarus\Logic\Model\Component\ComponentModelInterface;
 
-/**
- * The data interface.
- *
- * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
- *
- * @package Ikarus\Logic\Data
- */
-interface DataInterface
+interface SignalServerInterface extends OutputValuesServerInterface
 {
-    /**
-     *
-     * @param ComponentModelInterface $componentModel
-     * @return mixed
-     */
-    public function getData(ComponentModelInterface $componentModel);
+
 }

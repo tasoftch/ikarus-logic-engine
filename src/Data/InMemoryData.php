@@ -34,21 +34,28 @@
 
 namespace Ikarus\Logic\Data;
 
+use Ikarus\Logic\Compiler\Storage\InMemoryStorageCompiler;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 
 /**
- * The data interface.
+ * Class InMemoryData
  *
- * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
+ * Use this class with the
  *
  * @package Ikarus\Logic\Data
+ * @see InMemoryStorageCompiler
  */
-interface DataInterface
+class InMemoryData implements DataInterface
 {
-    /**
-     *
-     * @param ComponentModelInterface $componentModel
-     * @return mixed
-     */
-    public function getData(ComponentModelInterface $componentModel);
+    private $data;
+
+    public function __construct($memory)
+    {
+        $this->data = $memory;
+    }
+
+    public function getData(ComponentModelInterface $componentModel)
+    {
+        return $this->data;
+    }
 }

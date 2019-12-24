@@ -32,23 +32,24 @@
  *
  */
 
-namespace Ikarus\Logic\Data;
+namespace Ikarus\Logic\Model\Component;
 
-use Ikarus\Logic\Model\Component\ComponentModelInterface;
+use Ikarus\Logic\Context\InputValuesServerInterface;
+use Ikarus\Logic\Context\RuntimeContextInterface;
+use Ikarus\Logic\Context\SignalServerInterface;
 
 /**
- * The data interface.
+ * Node components declaring signal sockets must implement this method.
  *
- * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
- *
- * @package Ikarus\Logic\Data
+ * @package Ikarus\Logic\Model\Component
  */
-interface DataInterface
+interface ExecutableSignalTriggerNodeComponentInterface extends NodeComponentInterface
 {
     /**
-     *
-     * @param ComponentModelInterface $componentModel
-     * @return mixed
+     * @param string $onInputSocketName
+     * @param RuntimeContextInterface $context
+     * @param InputValuesServerInterface $inputValuesServer
+     * @param SignalServerInterface $signalServer
      */
-    public function getData(ComponentModelInterface $componentModel);
+    public function handleSignalTrigger(string $onInputSocketName, RuntimeContextInterface $context, InputValuesServerInterface $inputValuesServer, SignalServerInterface $signalServer);
 }

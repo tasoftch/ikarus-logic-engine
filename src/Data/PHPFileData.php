@@ -34,21 +34,45 @@
 
 namespace Ikarus\Logic\Data;
 
+
+use Ikarus\Logic\Compiler\Storage\PHPFileStorageCompiler;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
+use InvalidArgumentException;
 
 /**
- * The data interface.
- *
- * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
- *
+ * Class PHPFileData
  * @package Ikarus\Logic\Data
+ * @see PHPFileStorageCompiler
  */
-interface DataInterface
+class PHPFileData implements DataInterface
 {
+    /** @var string */
+    private $filename;
+
     /**
-     *
-     * @param ComponentModelInterface $componentModel
-     * @return mixed
+     * PHPFileData constructor.
+     * @param string $filename
      */
-    public function getData(ComponentModelInterface $componentModel);
+    public function __construct(string $filename)
+    {
+        if(!is_file($filename) || !is_readable($filename)) {
+            throw new InvalidArgumentException("File " . basename($filename) . " not found on this server");
+        }
+        $this->filename = $filename;
+    }
+
+    public function getData(ComponentModelInterface $componentModel)
+    {
+        list($x, $X) = array_values(require $this->getFilename() );
+        print_r($x);
+    }
+
+
+    /**
+     * @return string
+     */
+    public function getFilename(): string
+    {
+        return $this->filename;
+    }
 }

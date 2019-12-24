@@ -32,23 +32,25 @@
  *
  */
 
-namespace Ikarus\Logic\Data;
+namespace Ikarus\Logic\Model\Component;
 
-use Ikarus\Logic\Model\Component\ComponentModelInterface;
+
+use Ikarus\Logic\Context\InputValuesServerInterface;
+use Ikarus\Logic\Context\OutputValuesServerInterface;
+use Ikarus\Logic\Context\RuntimeContextInterface;
 
 /**
- * The data interface.
+ * Components implementing this interface are able to handle standard inputs and outputs with values only.
+ * If your component declares expression sockets, it must implement this interface.
  *
- * Please use the prepared data sources by this package or by the ikarus/logic-compiler package.
- *
- * @package Ikarus\Logic\Data
+ * @package Ikarus\Logic\Model\Component
  */
-interface DataInterface
+interface ExecutableExpressionNodeComponentInterface extends NodeComponentInterface
 {
     /**
-     *
-     * @param ComponentModelInterface $componentModel
-     * @return mixed
+     * @param RuntimeContextInterface $context
+     * @param InputValuesServerInterface $inputValuesServer
+     * @param OutputValuesServerInterface $outputValuesServer
      */
-    public function getData(ComponentModelInterface $componentModel);
+    public function updateNode(RuntimeContextInterface $context, InputValuesServerInterface $inputValuesServer, OutputValuesServerInterface $outputValuesServer);
 }
