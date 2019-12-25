@@ -64,7 +64,17 @@ class PHPFileData implements DataInterface
     public function getData(ComponentModelInterface $componentModel)
     {
         list($x, $X) = array_values(require $this->getFilename() );
-        print_r($x);
+        $handler = function(&$k) use ($componentModel) {
+            foreach($k as &$ts) {
+                foreach($ts as &$d) {
+                    $d["dc"] = $componentModel->getComponent( $d["dc"] );
+                }
+            }
+        };
+        $handler($X["i2o"]);
+        $handler($X["o2i"]);
+
+        return ['x' => $x, 'X' => $X];
     }
 
 

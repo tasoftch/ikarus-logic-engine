@@ -39,12 +39,17 @@
  * Created on 2019-12-23 19:46 by thomas
  */
 
+use Ikarus\Logic\Compiler\CompilerResult;
+use Ikarus\Logic\Compiler\Consistency\FullConsistencyCompiler;
+use Ikarus\Logic\Compiler\Executable\FullExecutableCompiler;
+use Ikarus\Logic\Compiler\Storage\InMemoryStorageCompiler;
 use Ikarus\Logic\Data\PHPFileData;
-use Ikarus\Logic\Model\Component\NodeComponent;
+use Ikarus\Logic\Model\Component\ExecutableNodeComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedInputComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedOutputComponent;
 use Ikarus\Logic\Model\Component\Socket\InputComponent;
 use Ikarus\Logic\Model\Component\Socket\OutputComponent;
+use Ikarus\Logic\Model\Data\Loader\PHPArrayLoader;
 use Ikarus\Logic\Model\Package\BasicTypesPackage;
 use Ikarus\Logic\Model\PriorityComponentModel;
 use PHPUnit\Framework\TestCase;
@@ -55,27 +60,102 @@ class FileStorageTest extends TestCase
         $cModel = new PriorityComponentModel();
         $cModel->addPackage( new BasicTypesPackage() );
 
-        $cModel->addComponent( new NodeComponent("math", [
+        $cModel->addComponent( new ExecutableNodeComponent("math", [
             new InputComponent("leftOperand", "Number"),
             new InputComponent("rightOperand", "Number"),
             new OutputComponent("result", "Number")
         ]) );
 
-        $cModel->addComponent( new NodeComponent("userInput", [
+        $cModel->addComponent( new ExecutableNodeComponent("userInput", [
             // If you have a node obtaining values, it will provide them via outputs to other nodes inputs.
             new ExposedOutputComponent("enteredNumber", "Number")
         ]) );
 
-        $cModel->addComponent( new NodeComponent("displayDialog", [
+        $cModel->addComponent( new ExecutableNodeComponent("displayDialog", [
             new InputComponent("message", "String"),
             new OutputComponent("clickedButton", "Number")
         ]) );
 
-        $cModel->addComponent( new NodeComponent("askForPermission", [
+        $cModel->addComponent( new ExecutableNodeComponent("askForPermission", [
             new ExposedInputComponent("clickedButton", "Number")
         ]) );
 
+        $loader = new PHPArrayLoader([
+            PHPArrayLoader::SCENES_KEY => [
+                'myScene' => [
+                    PHPArrayLoader::NODES_KEY => [
+                        'askUser1' => [
+                            PHPArrayLoader::NAME_KEY => 'userInput',
+                            PHPArrayLoader::DATA_KEY => [
+                                'info' => 'Please enter the first operand'
+                            ]
+                        ],
+                        'askUser2' => [
+                            PHPArrayLoader::NAME_KEY => 'userInput',
+                            PHPArrayLoader::DATA_KEY => [
+                                'info' => 'Please enter the second operand'
+                            ]
+                        ],
+                        'myMath' => [
+                            PHPArrayLoader::NAME_KEY => 'math',
+                            PHPArrayLoader::DATA_KEY => [
+                                'operation' => '+'
+                            ]
+                        ],
+                        'showUser' => [
+                            PHPArrayLoader::NAME_KEY => 'displayDialog'
+                        ],
+                        'outputAnswer' => [
+                            PHPArrayLoader::NAME_KEY => 'askForPermission',
+                        ]
+                    ],
+                    PHPArrayLoader::CONNECTIONS_KEY => [
+                        [
+                            PHPArrayLoader::CONNECTION_INPUT_NODE_KEY => 'outputAnswer',
+                            PHPArrayLoader::CONNECTION_INPUT_KEY => 'clickedButton',
+                            PHPArrayLoader::CONNECTION_OUTPUT_NODE_KEY => 'showUser',
+                            PHPArrayLoader::CONNECTION_OUTPUT_KEY => 'clickedButton',
+                        ],
+                        [
+                            PHPArrayLoader::CONNECTION_INPUT_NODE_KEY => 'showUser',
+                            PHPArrayLoader::CONNECTION_INPUT_KEY => 'message',
+                            PHPArrayLoader::CONNECTION_OUTPUT_NODE_KEY => 'myMath',
+                            PHPArrayLoader::CONNECTION_OUTPUT_KEY => 'result',
+                        ],
+                        [
+                            PHPArrayLoader::CONNECTION_INPUT_NODE_KEY => 'myMath',
+                            PHPArrayLoader::CONNECTION_INPUT_KEY => 'leftOperand',
+                            PHPArrayLoader::CONNECTION_OUTPUT_NODE_KEY => 'askUser1',
+                            PHPArrayLoader::CONNECTION_OUTPUT_KEY => 'enteredNumber',
+                        ],
+                        [
+                            PHPArrayLoader::CONNECTION_INPUT_NODE_KEY => 'myMath',
+                            PHPArrayLoader::CONNECTION_INPUT_KEY => 'rightOperand',
+                            PHPArrayLoader::CONNECTION_OUTPUT_NODE_KEY => 'askUser2',
+                            PHPArrayLoader::CONNECTION_OUTPUT_KEY => 'enteredNumber',
+                        ]
+                    ]
+                ]
+            ]
+        ]);
+        $loader->useIndicesAsIdentifiers = true;
+
+        $model = $loader->getModel();
+        $compiler = new FullConsistencyCompiler($cModel);
+
+        $result = new CompilerResult();
+        $compiler->compile($model, $result);
+
+        $compiler = new FullExecutableCompiler($cModel);
+        $compiler->compile($model, $result);
+
+        $storage = new InMemoryStorageCompiler($cModel);
+        $storage->setMemory($memory);
+        $storage->compile($model, $result);
+
         $storage = new PHPFileData("Tests/test.storage.php");
-        print_r($storage->getData($cModel));
+        $phpFile = $storage->getData($cModel);
+
+        $this->assertSame($memory, $phpFile);
     }
 }
