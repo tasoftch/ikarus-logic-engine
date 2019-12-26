@@ -32,10 +32,30 @@
  *
  */
 
-namespace Ikarus\Logic;
+namespace Ikarus\Logic\Exception;
 
 
-class EngineContext
+use Ikarus\Logic\EngineInterface;
+use Ikarus\Logic\Model\Exception\LogicException;
+
+class ImmutableEngineException extends LogicException
 {
+    /** @var EngineInterface */
+    private $engine;
 
+    /**
+     * @return EngineInterface
+     */
+    public function getEngine(): EngineInterface
+    {
+        return $this->engine;
+    }
+
+    /**
+     * @param EngineInterface $engine
+     */
+    public function setEngine(EngineInterface $engine): void
+    {
+        $this->engine = $engine;
+    }
 }

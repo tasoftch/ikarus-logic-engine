@@ -37,6 +37,7 @@ namespace Ikarus\Logic;
 
 use Ikarus\Logic\Data\DataInterface;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
+use Ikarus\Logic\ValueProvider\ValueProviderInterface;
 
 interface EngineInterface
 {
@@ -80,8 +81,8 @@ interface EngineInterface
     public function terminate();
 
     /**
-     * After activation, the engine resists in an idle mode, which means it is waiting for:
-     * - A value gets fetched
+     * After activation, the engine remains in an idle mode, which means it is waiting for:
+     * - A value gets requested
      * - A signal gets triggered
      *
      * For performance reasons both events are executed in a render cycle.
@@ -110,18 +111,17 @@ interface EngineInterface
 
     /**
      * This method asks the logic for a value.
-     * It will search for the node with $nodeIdentifier and its exposed socket (input socket only).
-     * If an exposed input socket matches the passed $exposedSocketKey the engine starts to resolve the input value.
-     * In practice, it will cause the node component holding that socket to update.
+     * It will search for the node with $nodeIdentifier and its exposed socket.
+     * If an exposed socket matches the passed $exposedSocketKey the engine will update the node and fetch the exposed value.
      * Fetching a value increases the render cycle.
      * So if you want to fetch several values at one time, begin a render cycle before and end it after! (Much better performance)
      *
      * @param string|int $nodeIdentifier
      * @param string $exposedSocketKey
-     * @param mixed ...$inputArguments
+     * @param ValueProviderInterface|null $valueProvider
      * @return mixed
      */
-    public function requestValue($nodeIdentifier, string $exposedSocketKey, ...$inputArguments);
+    public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL);
 
     /**
      * Calling this method triggers a signal in the logic.
