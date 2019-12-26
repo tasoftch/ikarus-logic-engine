@@ -39,13 +39,20 @@
  * Created on 2019-12-25 11:05 by thomas
  */
 
+use Ikarus\Logic\Compiler\CompilerResult;
+use Ikarus\Logic\Compiler\Consistency\FullConsistencyCompiler;
+use Ikarus\Logic\Compiler\Executable\FullExecutableCompiler;
+use Ikarus\Logic\Data\CompilerResultData;
 use Ikarus\Logic\Data\PHPFileData;
 use Ikarus\Logic\Engine;
+use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\Model\Component\ExecutableNodeComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedInputComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedOutputComponent;
 use Ikarus\Logic\Model\Component\Socket\InputComponent;
 use Ikarus\Logic\Model\Component\Socket\OutputComponent;
+use Ikarus\Logic\Model\Data\DataModelInterface;
+use Ikarus\Logic\Model\DataModel;
 use Ikarus\Logic\Model\Executable\Context\RuntimeContextInterface;
 use Ikarus\Logic\Model\Executable\Context\ValuesServerInterface;
 use Ikarus\Logic\Model\Package\BasicTypesPackage;
@@ -142,5 +149,150 @@ class EngineTest extends TestCase
 
         $result = $engine->requestValue("outputAnswer", "clickedButton", $vp);
         $this->assertSame(6, $result);
+    }
+
+    private function makeEngine(ComponentModelInterface $cModel, DataModelInterface $dataModel): Engine {
+        $compiler = new FullConsistencyCompiler($cModel);
+        $result = new CompilerResult();
+        $compiler->compile($dataModel, $result);
+
+        $compiler = new FullExecutableCompiler($cModel);
+        $compiler->compile($dataModel, $result);
+
+        $data = new CompilerResultData($result);
+        $engine = new Engine($cModel);
+        $engine->bindData($data);
+        return $engine;
+    }
+
+    public function testCycleStacking() {
+        $updateCount = 0;
+
+        $engine = $this->makeEngine(
+            (new PriorityComponentModel())
+                ->addPackage(new BasicTypesPackage())
+                ->addComponent(new ExecutableNodeComponent("OUT", [
+                    new ExposedInputComponent("input", "String")
+                ]))
+                ->addComponent((new ExecutableNodeComponent("HAND", [
+                    new ExposedInputComponent("value", "Number"),
+                    new ExposedInputComponent("format", "String"),
+                    new OutputComponent("string", "String")
+                ]))
+                    ->setUpdateHandler(function(ValuesServerInterface $server) use (&$updateCount) {
+                        $updateCount++;
+                        $value = $server->fetchInputValue("value");
+                        $format = $server->fetchInputValue("format");
+
+                        $server->pushOutputValue('string', sprintf($format, $value));
+                    })
+                ),
+            (new DataModel())
+                ->addScene("myScene")
+                ->addNode('node1', "OUT", "myScene")
+                ->addNode("node2", "HAND", 'myScene')
+                ->addNode("node3", "OUT", "myScene")
+                ->connect("node3", "input", "node2", "string")
+                ->connect("node1", "input", "node2", "string")
+        );
+
+        $engine->activate();
+        $result = $engine->requestValue("node1", "input");
+        $this->assertSame("", $result);
+
+        // Only 1 times updated, because only one node did request
+        $this->assertEquals(1, $updateCount);
+
+        $vp = new ValueProvider();
+        $vp->addValue(200, "value", 'node2');
+        $vp->addValue('%dms', "format", 'node2');
+
+        $result = $engine->requestValue("node3", "input", $vp);
+        $this->assertSame("200ms", $result);
+
+        $this->assertEquals(2, $updateCount);
+
+        $updateCount = 0;
+
+        $vp->addValue(200, "value", 'node2');
+        $vp->addValue('%dms', "format", 'node2');
+
+
+        $result1 = $engine->requestValue("node3", "input", $vp);
+
+        $vp->addValue(300, "value", 'node2');
+        $vp->addValue('%dms', "format", 'node2');
+
+        $result2 = $engine->requestValue("node1", "input", $vp);
+
+
+
+        $this->assertSame("200ms", $result1);
+        $this->assertSame('300ms', $result2);
+
+        $this->assertSame(2, $updateCount);
+    }
+
+    public function testInternalCachingBetweenCycles() {
+        $updateCount = 0;
+
+        $engine = $this->makeEngine(
+            (new PriorityComponentModel())
+                ->addPackage(new BasicTypesPackage())
+                ->addComponent(new ExecutableNodeComponent("OUT", [
+                    new ExposedInputComponent("input", "String")
+                ]))
+                ->addComponent((new ExecutableNodeComponent("HAND", [
+                    new ExposedInputComponent("value", "Number"),
+                    new ExposedInputComponent("format", "String"),
+                    new OutputComponent("string", "String")
+                ]))
+                    ->setUpdateHandler(function(ValuesServerInterface $server) {
+                        $value = $server->fetchInputValue("value");
+                        $format = $server->fetchInputValue("format");
+
+                        $server->pushOutputValue('string', sprintf($format, $value));
+                    })
+                )
+                ->addComponent((new ExecutableNodeComponent("math", [
+                    new ExposedInputComponent("left", "Number"),
+                    new ExposedInputComponent("right", "Number"),
+                    new OutputComponent("result", "Number")
+                ]))
+                    ->setUpdateHandler(function(ValuesServerInterface $server) use (&$updateCount) {
+                        $updateCount++;
+                        $left = $server->fetchInputValue("left");
+                        $right = $server->fetchInputValue("right");
+
+                        $server->pushOutputValue('result', $left + $right);
+                    })
+                )
+                ->addComponent(new ExecutableNodeComponent("IN", [
+                    new ExposedOutputComponent("userInput", "Number")
+                ])),
+            (new DataModel())
+                ->addScene("myScene")
+                ->addNode('out', "OUT", "myScene")
+                ->addNode("handler", "HAND", 'myScene')
+                ->addNode("myMath", "math", "myScene")
+                ->addNode("myMath2", "math", "myScene")
+                ->addNode("myIn", "IN", "myScene")
+
+                ->connect("out", "input", "handler", "string")
+                ->connect("handler", "value", "myMath", "result")
+                ->connect("myMath", "right", "myMath2", "result")
+                ->connect("myMath", "left", "myIn", "userInput")
+                ->connect("myMath2", "left", "myIn", "userInput")
+        );
+
+        $engine->activate();
+
+        $vp = new ValueProvider();
+        $vp->addValue(10, "userInput", "myIn");
+        $vp->addValue(5, "right", 'myMath2');
+        $vp->addValue('%dms', "format", 'handler');
+
+        $result = $engine->requestValue("out", "input", $vp);
+        $this->assertSame("25ms", $result);
     }
 }

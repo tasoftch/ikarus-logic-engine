@@ -43,6 +43,7 @@ use Ikarus\Logic\Internal\_RuntimeContext;
 use Ikarus\Logic\Internal\_StackFrame;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\Model\Component\Socket\AbstractSocketComponent;
+use Ikarus\Logic\Model\Component\Socket\ExposedSocketComponentInterface;
 use Ikarus\Logic\Model\Data\Node\AttributedNodeDataModel;
 use Ikarus\Logic\Model\Exception\InvalidReferenceException;
 use Ikarus\Logic\Model\Executable\ExecutableExpressionNodeComponentInterface;
@@ -185,6 +186,10 @@ class Engine implements EngineInterface
      */
     public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL)
     {
+        if(!$this->isActive()) {
+            trigger_error("Engine is not active", E_USER_ERROR);
+            return;
+        }
         if(_ExposedSocketResolver::getExposedSocket($nodeIdentifier, $exposedSocketKey, $this->_x, $type, $compName)) {
             try {
                 $this->beginRenderCycle();
@@ -232,7 +237,11 @@ class Engine implements EngineInterface
                 return NULL;
             }
 
-
+            $socket = $component->getInputSockets()[$socketName] ?? $component->getOutputSockets()[$socketName] ?? NULL;
+            if($socket instanceof ExposedSocketComponentInterface) {
+                if($valueProvider)
+                    return $valueProvider->getValue($socketName, $nodeIdentifier);
+            }
 
             // If there is no connection, get from node attributes
             $sf = $this->context->getCurrentStackFrame();
@@ -240,10 +249,8 @@ class Engine implements EngineInterface
                 return $sf->getCycle()->nodeAttributes[ AttributedNodeDataModel::ATTRIBUTE_CUSTOM_INPUT_VALUES ] [$socketName];
             }
 
-            if($socket = $component->getInputSockets()[$socketName] ?? $component->getOutputSockets()[$socketName] ?? NULL) {
-                if($socket instanceof AbstractSocketComponent && $socket->hasDefaultValue()) {
-                    return $socket->getDefaultValue();
-                }
+            if($socket instanceof AbstractSocketComponent && $socket->hasDefaultValue()) {
+                return $socket->getDefaultValue();
             }
 
             return NULL;
@@ -288,6 +295,8 @@ class Engine implements EngineInterface
             } catch (Throwable $exception) {
                 throw $exception;
             } finally {
+
+
                 $sf->popCycle();
             }
         }
