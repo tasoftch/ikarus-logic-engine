@@ -43,7 +43,6 @@ use Ikarus\Logic\Internal\StackFrame\_PermeableStackFrame;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\Model\Component\Socket\AbstractSocketComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedSocketComponentInterface;
-use Ikarus\Logic\Model\Data\Node\AttributedNodeDataModel;
 use Ikarus\Logic\Model\Exception\InvalidReferenceException;
 use Ikarus\Logic\Model\Executable\ExecutableExpressionNodeComponentInterface;
 use Ikarus\Logic\ValueProvider\ValueProviderInterface;
@@ -232,8 +231,8 @@ class Engine implements EngineInterface
 
             // If there is no connection, get from node attributes
             $sf = $this->context->getCurrentStackFrame();
-            if(isset($sf->getCycle()->nodeAttributes[ AttributedNodeDataModel::ATTRIBUTE_CUSTOM_INPUT_VALUES ] [$socketName])) {
-                return $sf->getCycle()->nodeAttributes[ AttributedNodeDataModel::ATTRIBUTE_CUSTOM_INPUT_VALUES ] [$socketName];
+            if(isset($sf->getCycle()->nodeAttributes[ $socketName ])) {
+                return $sf->getCycle()->nodeAttributes[ $socketName ];
             }
 
             if($socket instanceof AbstractSocketComponent && $socket->hasDefaultValue()) {
