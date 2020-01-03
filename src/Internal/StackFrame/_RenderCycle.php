@@ -32,7 +32,7 @@
  *
  */
 
-namespace Ikarus\Logic\Internal;
+namespace Ikarus\Logic\Internal\StackFrame;
 
 
 class _RenderCycle

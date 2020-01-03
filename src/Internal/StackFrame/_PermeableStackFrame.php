@@ -32,14 +32,32 @@
  *
  */
 
-namespace Ikarus\Logic\Internal;
+namespace Ikarus\Logic\Internal\StackFrame;
 
 
-class _RenderCycleCount
+class _PermeableStackFrame extends _StackFrame
 {
-    public $cycleCount=0;
+    public function updateValuesServer()
+    {
+        if($cycle = $this->getCycle()) {
+            $nodeID = $cycle->nodeIdentifier;
 
-    public function release() {
-
+            $this->valuesServer->outputValues = function($socketName, $value) use ($nodeID) {
+                $this->cachedOutputValues["$nodeID:$socketName"] = $value;
+            };
+            $this->valuesServer->exposedValues = function($socketName, $value) use ($nodeID) {
+                $this->cachedExposedValues["$nodeID:$socketName"] = $value;
+            };
+            $this->valuesServer->inputValues = function($socketName) use ($cycle) {
+                $nodeID = $cycle->nodeIdentifier;
+                if(!isset($this->cachedInputValues["$nodeID:$socketName"])) {
+                    $this->cachedInputValues["$nodeID:$socketName"] = ($cycle->inputValuesProvider)($socketName);
+                }
+                return $this->cachedInputValues["$nodeID:$socketName"];
+            };
+        } else {
+            // Should only happen after last node was updated or a manual interaction occured.
+            $this->valuesServer->inputValues = $this->valuesServer->outputValues = $this->valuesServer->exposedValues = function(){};
+        }
     }
 }

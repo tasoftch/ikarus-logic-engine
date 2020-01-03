@@ -32,8 +32,9 @@
  *
  */
 
-namespace Ikarus\Logic\Internal;
+namespace Ikarus\Logic\Internal\StackFrame;
 
+use Ikarus\Logic\Internal\_ValuesServer;
 use Ikarus\Logic\ValueProvider\ValueProviderInterface;
 
 class _StackFrame
@@ -52,7 +53,7 @@ class _StackFrame
     /** @var _RenderCycle[] */
     private $renderCycles = [];
     /** @var _ValuesServer */
-    private $valuesServer;
+    protected $valuesServer;
 
     public $cachedOutputValues;
     public $cachedExposedValues;

@@ -67,6 +67,15 @@ interface EngineInterface
     public function activate();
 
     /**
+     * After activation, the engine remains in an idle mode, which means it is waiting for:
+     * - A value gets requested
+     * - A signal gets triggered
+     *
+     * For performance reasons both events are executed in a render cycle.
+     * Node components get informed, if they already have updated a node in the same cycle
+     */
+
+    /**
      * Returns if the engine was activated or is idling.
      *
      * @return bool
@@ -80,14 +89,6 @@ interface EngineInterface
      */
     public function terminate();
 
-    /**
-     * After activation, the engine remains in an idle mode, which means it is waiting for:
-     * - A value gets requested
-     * - A signal gets triggered
-     *
-     * For performance reasons both events are executed in a render cycle.
-     * Node components get informed, if they already have updated a node in the same cycle
-     */
 
     /**
      * Begin a new render cycle

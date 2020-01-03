@@ -35,6 +35,7 @@
 namespace Ikarus\Logic\Internal;
 
 
+use Ikarus\Logic\Internal\StackFrame\_StackFrame;
 use Ikarus\Logic\Model\Executable\Context\RuntimeContextInterface;
 
 class _RuntimeContext implements RuntimeContextInterface

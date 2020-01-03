@@ -38,9 +38,8 @@ namespace Ikarus\Logic;
 use Ikarus\Logic\Data\DataInterface;
 use Ikarus\Logic\Exception\ImmutableEngineException;
 use Ikarus\Logic\Internal\_ExposedSocketResolver;
-use Ikarus\Logic\Internal\_RenderCycleCount;
 use Ikarus\Logic\Internal\_RuntimeContext;
-use Ikarus\Logic\Internal\_StackFrame;
+use Ikarus\Logic\Internal\StackFrame\_PermeableStackFrame;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\Model\Component\Socket\AbstractSocketComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedSocketComponentInterface;
@@ -63,9 +62,6 @@ class Engine implements EngineInterface
 
     /** @var _RuntimeContext */
     private $context;
-
-    /** @var _RenderCycleCount */
-    private $renderCycle;
 
     /**
      * Engine constructor.
@@ -114,7 +110,6 @@ class Engine implements EngineInterface
         }
 
         $this->context = new _RuntimeContext();
-        $this->renderCycle = new _RenderCycleCount();
         $this->active = true;
     }
 
@@ -132,7 +127,6 @@ class Engine implements EngineInterface
     public function terminate()
     {
         $this->context = NULL;
-        $this->renderCycle = NULL;
 
         $this->_x = $this->_X = NULL;
         $this->active = false;
@@ -144,9 +138,7 @@ class Engine implements EngineInterface
     public function beginRenderCycle()
     {
         if($this->isActive()) {
-            $this->renderCycle->cycleCount++;
-            if($this->renderCycle->cycleCount == 1)
-                $this->renderCycleDidStart();
+            $this->context->pushStackFrame( new _PermeableStackFrame() );
         }
     }
 
@@ -156,12 +148,7 @@ class Engine implements EngineInterface
     public function endRenderCycle()
     {
         if($this->isActive()) {
-            if($this->renderCycle->cycleCount == 1)
-                $this->renderCycleWillEnd();
-
-            $this->renderCycle->cycleCount--;
-            if($this->renderCycle->cycleCount == 0)
-                $this->renderCycle->release();
+            $this->context->popStackFrame();
         }
     }
 
@@ -178,23 +165,20 @@ class Engine implements EngineInterface
     }
 
     /**
-     * @param int|string $nodeIdentifier
-     * @param string $exposedSocketKey
-     * @param ValueProviderInterface|NULL $valueProvider
-     * @return mixed|null
+     * @inheritDoc
      * @throws Throwable
      */
     public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL)
     {
         if(!$this->isActive()) {
             trigger_error("Engine is not active", E_USER_ERROR);
-            return;
+            return NULL;
         }
         if(_ExposedSocketResolver::getExposedSocket($nodeIdentifier, $exposedSocketKey, $this->_x, $type, $compName)) {
             try {
                 $this->beginRenderCycle();
 
-                $sf = new _StackFrame();
+                $sf = new _PermeableStackFrame();
                 $sf->valueProvider = $valueProvider;
                 $this->context->pushStackFrame($sf);
 
