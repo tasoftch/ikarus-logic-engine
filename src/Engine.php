@@ -209,14 +209,17 @@ class Engine implements EngineInterface
                 $destNode = $c["dn"];
                 $destSock = $c["dk"];
 
-                $this->updateNode($destNode, $destSock);
-
                 $sf = $this->context->getCurrentStackFrame();
 
                 if($sf->hasOutputValue($destSock, $destNode)) {
                     return $sf->getOutputValue($destSock, $destNode);
-                } elseif($valueProvider) {
-                    return $valueProvider->getValue($destSock, $destNode);
+                } else {
+                    $this->updateNode($destNode, $destSock);
+                    if($sf->hasOutputValue($destSock, $destNode)) {
+                        return $sf->getOutputValue($destSock, $destNode);
+                    } elseif($valueProvider) {
+                        return $valueProvider->getValue($destSock, $destNode);
+                    }
                 }
                 return NULL;
             }

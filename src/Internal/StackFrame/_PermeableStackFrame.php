@@ -37,27 +37,79 @@ namespace Ikarus\Logic\Internal\StackFrame;
 
 class _PermeableStackFrame extends _StackFrame
 {
-    public function updateValuesServer()
+    protected function putOutputValue($socketName, $value, $nodeID)
     {
-        if($cycle = $this->getCycle()) {
-            $nodeID = $cycle->nodeIdentifier;
+        parent::putOutputValue($socketName, $value, $nodeID);
+        if($this->parentFrame)
+            $this->parentFrame->putOutputValue($socketName, $value, $nodeID);
+    }
 
-            $this->valuesServer->outputValues = function($socketName, $value) use ($nodeID) {
-                $this->cachedOutputValues["$nodeID:$socketName"] = $value;
-            };
-            $this->valuesServer->exposedValues = function($socketName, $value) use ($nodeID) {
-                $this->cachedExposedValues["$nodeID:$socketName"] = $value;
-            };
-            $this->valuesServer->inputValues = function($socketName) use ($cycle) {
-                $nodeID = $cycle->nodeIdentifier;
-                if(!isset($this->cachedInputValues["$nodeID:$socketName"])) {
-                    $this->cachedInputValues["$nodeID:$socketName"] = ($cycle->inputValuesProvider)($socketName);
-                }
-                return $this->cachedInputValues["$nodeID:$socketName"];
-            };
-        } else {
-            // Should only happen after last node was updated or a manual interaction occured.
-            $this->valuesServer->inputValues = $this->valuesServer->outputValues = $this->valuesServer->exposedValues = function(){};
+    protected function putExposedValue($socketName, $value, $nodeID)
+    {
+        parent::putExposedValue($socketName, $value, $nodeID);
+        if($this->parentFrame)
+            $this->parentFrame->putExposedValue($socketName, $value, $nodeID);
+    }
+
+    protected function putInputValue($socketName, $value, $nodeID)
+    {
+        parent::putInputValue($socketName, $value, $nodeID);
+        if($this->parentFrame)
+            $this->parentFrame->putInputValue($socketName, $value, $nodeID);
+    }
+
+    protected function fetchInputValue($socketName, &$found = NULL)
+    {
+        $value = parent::fetchInputValue($socketName, $found);
+        if(!$found && $this->parentFrame) {
+            $value = $this->parentFrame->fetchInputValue($socketName, $found);
         }
+        return $value;
+    }
+
+    public function hasOutputValue($socketName, $nodeIdentifier = NULL)
+    {
+        if(!parent::hasOutputValue($socketName, $nodeIdentifier)) {
+            if($this->parentFrame)
+                return $this->parentFrame->hasOutputValue($socketName, $nodeIdentifier);
+            return false;
+        }
+        return true;
+    }
+
+    public function hasExposedValue($socketName, $nodeIdentifier = NULL)
+    {
+        if(!parent::hasExposedValue($socketName, $nodeIdentifier)) {
+            if($this->parentFrame)
+                return $this->parentFrame->hasExposedValue($socketName, $nodeIdentifier);
+            return false;
+        }
+        return true;
+    }
+
+    public function getExposedValue($socketName, $nodeIdentifier = NULL)
+    {
+        if(!$nodeIdentifier)
+            $nodeIdentifier = $this->getCycle()->nodeIdentifier;
+
+        $f = $this;
+        do {
+            if(isset($f->cachedExposedValues["$nodeIdentifier:$socketName"]))
+                return $f->cachedExposedValues["$nodeIdentifier:$socketName"];
+        } while($f = $f->parentFrame);
+        return NULL;
+    }
+
+    public function getOutputValue($socketName, $nodeIdentifier = NULL)
+    {
+        if(!$nodeIdentifier)
+            $nodeIdentifier = $this->getCycle()->nodeIdentifier;
+
+        $f = $this;
+        do {
+            if(isset($f->cachedOutputValues["$nodeIdentifier:$socketName"]))
+                return $f->cachedOutputValues["$nodeIdentifier:$socketName"];
+        } while($f = $f->parentFrame);
+        return NULL;
     }
 }

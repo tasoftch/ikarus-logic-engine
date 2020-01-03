@@ -96,10 +96,17 @@ class MultipleOutputsTest extends TestCase
             // If the component handler does not provide a value, the engine will follow the exposure and ask the parent scope for that value.
         ]) );
 
-        $cModel->addComponent( new ExecutableNodeComponent("doubleOutputs", [
+        $cModel->addComponent( (new ExecutableNodeComponent("doubleOutputs", [
             new ExposedInputComponent("value1", "Number"),
             new ExposedInputComponent("value2", "Number"),
-        ]) );
+        ]))->setUpdateHandler(function(ValuesServerInterface $server) {
+            // Unnecessary because the engine tries to fetch the input value and expose it anyway.
+            // But to test the stackframes, this is implemented
+
+            $server->exposeValue( 'value1', $server->fetchInputValue('value1') );
+            $server->exposeValue( 'value2', $server->fetchInputValue('value2') );
+
+        }) );
 
         return $cModel;
     }
@@ -146,13 +153,35 @@ class MultipleOutputsTest extends TestCase
         $engine->activate();
 
         $value1 = $engine->requestValue('out', 'value1', $vp);
-        $this->assertEquals(1, $count);
+        // Both connection routes are performed! See the update handler of component doubleOutputs
+        $this->assertEquals(2, $count);
 
         $value2 = $engine->requestValue('out', 'value2', $vp);
 
 
         $this->assertEquals(15, $value1);
         $this->assertEquals(55, $value2);
+        $this->assertEquals(4, $count);
+
+        $count = 0;
+
+        // Do the same now but increase the render cycle
+
+        $engine->beginRenderCycle();
+
+        $value1 = $engine->requestValue('out', 'value1', $vp);
+        // Both connection routes are performed! See the update handler of component doubleOutputs
         $this->assertEquals(2, $count);
+
+        $value2 = $engine->requestValue('out', 'value2', $vp);
+
+
+        $this->assertEquals(15, $value1);
+        $this->assertEquals(55, $value2);
+
+        // But here the values are still cached!
+        $this->assertEquals(2, $count);
+
+        $engine->endRenderCycle();
     }
 }

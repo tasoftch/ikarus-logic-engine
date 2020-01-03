@@ -86,22 +86,43 @@ class _StackFrame
         $this->updateValuesServer();
     }
 
+    protected function putOutputValue($socketName, $value, $nodeID) {
+        $this->cachedOutputValues["$nodeID:$socketName"] = $value;
+    }
+
+    protected function putExposedValue($socketName, $value, $nodeID) {
+        $this->cachedExposedValues["$nodeID:$socketName"] = $value;
+    }
+
+    protected function putInputValue($socketName, $value, $nodeID) {
+        $this->cachedInputValues["$nodeID:$socketName"] = $value;
+    }
+
+    protected function fetchInputValue($socketName, &$found = NULL) {
+        if($cycle = $this->getCycle()) {
+            $nodeID = $cycle->nodeIdentifier;
+            if(!isset($this->cachedInputValues["$nodeID:$socketName"])) {
+                $this->putInputValue($socketName, ($cycle->inputValuesProvider)($socketName), $nodeID);
+            }
+            $found = true;
+            return $this->cachedInputValues["$nodeID:$socketName"];
+        }
+        $found = false;
+        return NULL;
+    }
+
     public function updateValuesServer() {
         if($cycle = $this->getCycle()) {
             $nodeID = $cycle->nodeIdentifier;
 
             $this->valuesServer->outputValues = function($socketName, $value) use ($nodeID) {
-                $this->cachedOutputValues["$nodeID:$socketName"] = $value;
+                $this->putOutputValue($socketName, $value, $nodeID);
             };
             $this->valuesServer->exposedValues = function($socketName, $value) use ($nodeID) {
                 $this->cachedExposedValues["$nodeID:$socketName"] = $value;
             };
-            $this->valuesServer->inputValues = function($socketName) use ($cycle) {
-                $nodeID = $cycle->nodeIdentifier;
-                if(!isset($this->cachedInputValues["$nodeID:$socketName"])) {
-                    $this->cachedInputValues["$nodeID:$socketName"] = ($cycle->inputValuesProvider)($socketName);
-                }
-                return $this->cachedInputValues["$nodeID:$socketName"];
+            $this->valuesServer->inputValues = function($socketName) {
+                return $this->fetchInputValue($socketName);
             };
         } else {
             // Should only happen after last node was updated or a manual interaction occured.
