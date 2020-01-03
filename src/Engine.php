@@ -204,23 +204,38 @@ class Engine implements EngineInterface
         return function($socketName) use ($nodeIdentifier, $component, $valueProvider) {
             // Check, if node has connection
             if($cinfo = $this->_X['i2o']["$nodeIdentifier:$socketName"] ?? NULL) {
-                $c = array_shift($cinfo);
-                $destNode = $c["dn"];
-                $destSock = $c["dk"];
+                $value = NULL;
+                $mpl = $component->getInputSockets()[$socketName]->allowsMultiple();
 
-                $sf = $this->context->getCurrentStackFrame();
+                $setValue = function($v) use (&$value, $mpl) {
+                    if($mpl)
+                        $value[] = $v;
+                    else
+                        $value = $v;
+                };
 
-                if($sf->hasOutputValue($destSock, $destNode)) {
-                    return $sf->getOutputValue($destSock, $destNode);
-                } else {
-                    $this->updateNode($destNode, $destSock);
+                do {
+                    $c = array_shift($cinfo);
+
+                    $destNode = $c["dn"];
+                    $destSock = $c["dk"];
+
+                    $sf = $this->context->getCurrentStackFrame();
+
                     if($sf->hasOutputValue($destSock, $destNode)) {
-                        return $sf->getOutputValue($destSock, $destNode);
-                    } elseif($valueProvider) {
-                        return $valueProvider->getValue($destSock, $destNode);
+                        $setValue( $sf->getOutputValue($destSock, $destNode) );
+                    } else {
+                        $this->updateNode($destNode, $destSock);
+                        if($sf->hasOutputValue($destSock, $destNode)) {
+                            $setValue( $sf->getOutputValue($destSock, $destNode) );
+                        } elseif($valueProvider) {
+                            $setValue( $valueProvider->getValue($destSock, $destNode) );
+                        }
                     }
-                }
-                return NULL;
+
+                } while($cinfo && $mpl);
+
+                return $value;
             }
 
             $socket = $component->getInputSockets()[$socketName] ?? $component->getOutputSockets()[$socketName] ?? NULL;

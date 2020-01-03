@@ -184,4 +184,53 @@ class MultipleOutputsTest extends TestCase
 
         $engine->endRenderCycle();
     }
+
+    public function testMultipleInputs() {
+        $engine = $this->makeEngine(
+            (new PriorityComponentModel())
+            ->addPackage(new BasicTypesPackage())
+            ->addComponent((new ExecutableNodeComponent("COLLECT", [
+                new InputComponent("values", "Any", true),
+                new OutputComponent("list", "Any")
+            ]))
+                ->setUpdateHandler(function(ValuesServerInterface $server) {
+                    $values = $server->fetchInputValue('values');
+                    $server->pushOutputValue('list', $values);
+                })
+            )
+            ->addComponent(new ExecutableNodeComponent("OUT", [
+                new ExposedInputComponent("input", "Any")
+            ]))
+            ->addComponent(new ExecutableNodeComponent("IN", [
+                new ExposedOutputComponent("output", "Any")
+            ]))
+            ,
+            (new DataModel())
+                ->addScene("myScene")
+                ->addNode("out", 'OUT', "myScene")
+                ->addNode('in1', "IN", 'myScene')
+                ->addNode('in2', "IN", 'myScene')
+                ->addNode('in3', "IN", 'myScene')
+                ->addNode('in4', "IN", 'myScene')
+                ->addNode("cc", 'COLLECT', 'myScene')
+
+                ->connect("out", 'input', 'cc', 'list')
+                ->connect('cc', 'values', 'in1', 'output')
+                ->connect('cc', 'values', 'in2', 'output')
+                ->connect('cc', 'values', 'in3', 'output')
+        );
+
+        $engine->activate();
+
+        $vp = new ValueProvider();
+
+        $vp->addValue(5, 'output', 'in1');
+        $vp->addValue(15, 'output', 'in2');
+        $vp->addValue(25, 'output', 'in3');
+
+
+        $result = $engine->requestValue("out", 'input', $vp);
+
+        $this->assertEquals([5, 15, 25], $result);
+    }
 }
