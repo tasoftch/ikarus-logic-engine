@@ -35,21 +35,11 @@
 namespace Ikarus\Logic\Component;
 
 
-use Ikarus\Logic\Model\Component\AbstractNodeComponent;
+use Ikarus\Logic\Model\Component\NodeComponentInterface;
 
-/**
- * This is a special node component allowing to interact between scenes.
- *
- * Only this, or subclasses of this component are available to reference to other scenes and make the exposed input/outputs available
- *
- * @package Ikarus\Logic\Component
- */
-class ModuleNodeComponent extends AbstractNodeComponent
+interface JumpInSceneNodeComponentInterface extends NodeComponentInterface
 {
-    public function getName(): string
-    {
-        return "MODULE_SCENE";
-    }
+    const ATTRIBUTE_TARGET_SCENE_ID = 'scene';
 
 
 }
