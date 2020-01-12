@@ -50,6 +50,8 @@ use Throwable;
 
 class Engine implements EngineInterface
 {
+    const MAXIMAL_ALLOWED_RECURSIONS = 20;
+
     /** @var ComponentModelInterface */
     private $model;
     private $active = false;
@@ -282,7 +284,16 @@ class Engine implements EngineInterface
             );
 
             try {
+                static $recursionCounter = 0;
+                $recursionCounter++;
+
+                if($recursionCounter >= self::MAXIMAL_ALLOWED_RECURSIONS) {
+                    throw new \RuntimeException("Maximal recursion stack depth reached");
+                }
+
                 $component->updateNode($this->context->getCurrentStackFrame()->getValuesServer(), $this->context);
+
+                $recursionCounter--;
                 if($exposed && !$sf->hasExposedValue($exposed, $nodeIdentifier)) {
                     // fetch from input if possible
                     if($input = $component->getInputSockets()[$socketName] ?? NULL) {
