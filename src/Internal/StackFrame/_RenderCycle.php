@@ -54,4 +54,7 @@ class _RenderCycle
 
     /** @var callable */
     public $inputValuesProvider;
+
+    /** @var callable */
+    public $signalForwarder;
 }

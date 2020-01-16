@@ -45,7 +45,9 @@ use Ikarus\Logic\Model\Component\Socket\AbstractSocketComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedSocketComponentInterface;
 use Ikarus\Logic\Model\Exception\InvalidReferenceException;
 use Ikarus\Logic\Model\Executable\ExecutableExpressionNodeComponentInterface;
+use Ikarus\Logic\Model\Executable\ExecutableSignalTriggerNodeComponentInterface;
 use Ikarus\Logic\ValueProvider\ValueProviderInterface;
+use RuntimeException;
 use Throwable;
 
 class Engine implements EngineInterface
@@ -166,10 +168,21 @@ class Engine implements EngineInterface
     }
 
     /**
-     * @inheritDoc
-     * @throws Throwable
+     * This method asks the logic for a value.
+     * It will search for the node with $nodeIdentifier and its exposed socket.
+     * If an exposed socket matches the passed $exposedSocketKey the engine will update the node and fetch the exposed value.
+     * Fetching a value increases the render cycle.
+     * So if you want to fetch several values at one time, begin a render cycle before and end it after! (Much better performance).
+     * Setting $returnAll to true, returns all exposed values from node.
+     *
+     * @param string|int $nodeIdentifier
+     * @param string $exposedSocketKey
+     * @param ValueProviderInterface|null $valueProvider
+     * @param bool $returnAll
+     * @param null $errors
+     * @return mixed|array
      */
-    public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL)
+    public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL, bool $returnAll = false, &$errors = NULL)
     {
         if(!$this->isActive()) {
             trigger_error("Engine is not active", E_USER_ERROR);
@@ -183,11 +196,12 @@ class Engine implements EngineInterface
                 $sf->valueProvider = $valueProvider;
                 $this->context->pushStackFrame($sf);
 
-                $this->updateNode($nodeIdentifier, $exposedSocketKey, true);
+                $this->updateNode($nodeIdentifier, $exposedSocketKey);
 
-                return $sf->cachedExposedValues["$nodeIdentifier:$exposedSocketKey"] ?? NULL;
+                return $returnAll ? $sf->cachedExposedValues : ($sf->cachedExposedValues["$nodeIdentifier:$exposedSocketKey"] ?? NULL);
             } catch (Throwable $exception) {
-                throw $exception;
+                $errors[] = $exception;
+                return NULL;
             } finally {
                 $this->context->popStackFrame();
                 $this->endRenderCycle();
@@ -266,7 +280,7 @@ class Engine implements EngineInterface
      * @param bool $exposed
      * @throws Throwable
      */
-    private function updateNode($nodeIdentifier, $socketName, bool $exposed = false) {
+    private function updateNode($nodeIdentifier, $socketName) {
         $nodeInfo = $this->_X["nd"][$nodeIdentifier];
 
         if($this->context->needsUpdate( $nodeIdentifier, $componentName = $nodeInfo["c"] )) {
@@ -288,36 +302,127 @@ class Engine implements EngineInterface
                 $recursionCounter++;
 
                 if($recursionCounter >= self::MAXIMAL_ALLOWED_RECURSIONS) {
-                    throw new \RuntimeException("Maximal recursion stack depth reached");
+                    throw new RuntimeException("Maximal recursion stack depth reached");
                 }
 
                 $component->updateNode($this->context->getCurrentStackFrame()->getValuesServer(), $this->context);
 
                 $recursionCounter--;
-                if($exposed && !$sf->hasExposedValue($exposed, $nodeIdentifier)) {
-                    // fetch from input if possible
-                    if($input = $component->getInputSockets()[$socketName] ?? NULL) {
-                        $value = $sf->getValuesServer()->fetchInputValue($socketName);
-                        if(NULL !== $value) {
-                            $sf->getValuesServer()->exposeValue($socketName, $value);
-                            return;
-                        }
-                    }
-                }
             } catch (Throwable $exception) {
                 throw $exception;
             } finally {
+                $sf->popCycle();
+            }
+        }
+    }
 
+    /**
+     * Internal method to determine the next connected nodes
+     *
+     * @param array $nodeIdentifiers
+     * @param $socket
+     * @return array
+     * @internal
+     */
+    private function _getNextNodes(array $nodeIdentifiers, $socket): array {
+        $next = [];
 
+        foreach($nodeIdentifiers as $identifier) {
+            if(isset($this->_X["o2i"]["$identifier:$socket"]))
+                $next[$identifier] = $this->_X["o2i"]["$identifier:$socket"];
+        }
+
+        return $next;
+    }
+
+    /**
+     * Internal method to execute signal handler on component
+     *
+     * @param $connections
+     * @param $nextNodes
+     * @param $errors
+     */
+    private function _handleTriggerConnections($connections, &$nextNodes, &$errors) {
+        foreach($connections as $connection) {
+            try {
+                $nodeID = $connection["dn"];
+
+                $nodeInfo = $this->_X["nd"][$nodeID];
+                $component = $this->getModel()->getComponent( $nodeInfo["c"] );
+
+                $sf = $this->context->getCurrentStackFrame();
+
+                $sf->pushCycle(
+                    $nodeID,
+                    $nodeInfo["a"]??NULL,
+                    $component->getName(),
+                    NULL,
+                    $connection["dk"],
+                    $this->makeInputValueFetchCallback($nodeID, $sf->valueProvider),
+                    function($socketName) use (&$nextNodes, $nodeID) {
+                        $nextNodes = array_merge($nextNodes, $this->_getNextNodes([$nodeID], $socketName));
+                    }
+                );
+
+                if($component instanceof ExecutableSignalTriggerNodeComponentInterface) {
+                    $component->handleSignalTrigger(
+                        $connection["dk"],
+                        $sf->getValuesServer(),
+                        $this->context
+                    );
+                }
+            } catch (Throwable $exception) {
+                $errors[] = $exception;
+            } finally {
                 $sf->popCycle();
             }
         }
     }
 
 
-    public function triggerSignal(string $componentName, string $exposedSocketKey, $nodeIdentifier = NULL)
+    public function triggerSignal(string $exposedSocketKey, string $componentName = NULL, $nodeIdentifier = NULL, ValueProviderInterface $valueProvider = NULL, &$errors = NULL)
     {
+        if(!$this->isActive()) {
+            trigger_error("Engine is not active", E_USER_ERROR);
+            return NULL;
+        }
 
+        if($nodeIdentifier) {
+            // if the signal was triggered directly on a node, just create an array with it
+            $nodeIdentifiers = [$nodeIdentifier];
+        } elseif($componentName) {
+            $nodeIdentifiers = $this->_x['o'][ $componentName ][$exposedSocketKey] ?? [];
+        } else {
+            trigger_error("Can not find exposed socket $exposedSocketKey", E_USER_ERROR);
+            $nodeIdentifiers = [];
+        }
+
+        $preparedNodes = $this->_getNextNodes( $nodeIdentifiers, $exposedSocketKey );
+
+        try {
+            $this->beginRenderCycle();
+
+            $sf = new _PermeableStackFrame();
+            $sf->valueProvider = $valueProvider;
+            $this->context->pushStackFrame($sf);
+
+            while ($prepared = $preparedNodes) {
+                // Signal triggers are plain handled and not recursive.
+                // After handling all node components in this cycle, continue if any of them triggers a new signal
+                $preparedNodes = [];
+
+                foreach($prepared as $nid => $connections) {
+                    $this->_handleTriggerConnections($connections, $preparedNodes, $errors);
+                }
+            }
+
+            return $sf->cachedExposedSignals;
+        } catch (Throwable $throwable) {
+        } finally {
+            $this->context->popStackFrame();
+            $this->endRenderCycle();
+        }
+        return false;
     }
 
     /**

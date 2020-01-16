@@ -34,7 +34,7 @@
 
 namespace Ikarus\Logic\Internal\StackFrame;
 
-use Ikarus\Logic\Internal\_ValuesServer;
+use Ikarus\Logic\Internal\_SignalServer;
 use Ikarus\Logic\ValueProvider\ValueProviderInterface;
 
 class _StackFrame
@@ -52,19 +52,20 @@ class _StackFrame
 
     /** @var _RenderCycle[] */
     private $renderCycles = [];
-    /** @var _ValuesServer */
+    /** @var _SignalServer */
     protected $valuesServer;
 
     public $cachedOutputValues;
     public $cachedExposedValues;
+    public $cachedExposedSignals;
     public $cachedInputValues;
 
     public function __construct()
     {
-        $this->valuesServer = new _ValuesServer();
+        $this->valuesServer = new _SignalServer();
     }
 
-    public function pushCycle($nodeID, $nodeAttrs, $componentName, $requestedSocket, $triggeredSocket, callable $inputValueProvider) {
+    public function pushCycle($nodeID, $nodeAttrs, $componentName, $requestedSocket, $triggeredSocket, callable $inputValueProvider, callable $signalForwarder = NULL) {
         $cycle = new _RenderCycle();
         $cycle->nodeIdentifier = $nodeID;
         $cycle->nodeAttributes = $nodeAttrs;
@@ -72,6 +73,7 @@ class _StackFrame
         $cycle->nodeComponentName = $componentName;
         $cycle->triggeredSocketName = $triggeredSocket;
         $cycle->inputValuesProvider = $inputValueProvider;
+        $cycle->signalForwarder = $signalForwarder;
 
         $this->renderCycles[] = $cycle;
         $this->updateValuesServer();
@@ -94,6 +96,10 @@ class _StackFrame
         $this->cachedExposedValues["$nodeID:$socketName"] = $value;
     }
 
+    protected function putExposedSignal($socketName, $nodeID) {
+        $this->cachedExposedSignals[] = [$nodeID, $socketName];
+    }
+
     protected function putInputValue($socketName, $value, $nodeID) {
         $this->cachedInputValues["$nodeID:$socketName"] = $value;
     }
@@ -111,6 +117,12 @@ class _StackFrame
         return NULL;
     }
 
+    protected function triggerSignal($socketName, $nodeID) {
+        if($cycle = $this->getCycle()) {
+            call_user_func( $cycle->signalForwarder, $socketName, $nodeID);
+        }
+    }
+
     public function updateValuesServer() {
         if($cycle = $this->getCycle()) {
             $nodeID = $cycle->nodeIdentifier;
@@ -119,14 +131,31 @@ class _StackFrame
                 $this->putOutputValue($socketName, $value, $nodeID);
             };
             $this->valuesServer->exposedValues = function($socketName, $value) use ($nodeID) {
-                $this->cachedExposedValues["$nodeID:$socketName"] = $value;
+                $this->putExposedValue($socketName, $value, $nodeID);
             };
             $this->valuesServer->inputValues = function($socketName) {
                 return $this->fetchInputValue($socketName);
             };
+            if($cycle->signalForwarder) {
+                $this->valuesServer->signalForwarder = function($socketName) use ($nodeID) {
+                    $this->triggerSignal($socketName, $nodeID);
+                };
+                $this->valuesServer->exposedSignals = function($socketName) use ($nodeID) {
+                    $this->putExposedSignal($socketName, $nodeID);
+                };
+            } else {
+                $this->valuesServer->signalForwarder = function($sn){trigger_error("No signal server available for socket $sn", E_USER_NOTICE);};
+            }
+
         } else {
             // Should only happen after last node was updated or a manual interaction occured.
-            $this->valuesServer->inputValues = $this->valuesServer->outputValues = $this->valuesServer->exposedValues = function(){};
+            $this->valuesServer->inputValues =
+            $this->valuesServer->outputValues =
+            $this->valuesServer->exposedValues =
+                function(){};
+
+            $this->valuesServer->signalForwarder =
+                function($sn){trigger_error("No signal server available for socket $sn", E_USER_NOTICE);};
         }
     }
 
@@ -155,9 +184,9 @@ class _StackFrame
     }
 
     /**
-     * @return _ValuesServer
+     * @return _SignalServer
      */
-    public function getValuesServer(): _ValuesServer
+    public function getValuesServer(): _SignalServer
     {
         return $this->valuesServer;
     }

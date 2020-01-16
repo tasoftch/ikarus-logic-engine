@@ -51,6 +51,14 @@ class _PermeableStackFrame extends _StackFrame
             $this->parentFrame->putExposedValue($socketName, $value, $nodeID);
     }
 
+    protected function putExposedSignal($socketName, $nodeID)
+    {
+        parent::putExposedSignal($socketName, $nodeID);
+        if($this->parentFrame)
+            $this->parentFrame->putExposedSignal($socketName, $nodeID);
+    }
+
+
     protected function putInputValue($socketName, $value, $nodeID)
     {
         parent::putInputValue($socketName, $value, $nodeID);
