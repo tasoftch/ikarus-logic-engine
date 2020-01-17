@@ -183,6 +183,9 @@ class MultipleOutputsTest extends TestCase
         $this->assertEquals(2, $count);
 
         $engine->endRenderCycle();
+
+        $values = $engine->updateNode('out', $vp);
+        print_r($values);
     }
 
     public function testMultipleInputs() {

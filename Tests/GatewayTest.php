@@ -32,14 +32,56 @@
  *
  */
 
-namespace Ikarus\Logic\Component;
+/**
+ * GatewayTest.php
+ * ikarus-logic-engine
+ *
+ * Created on 2020-01-17 17:18 by thomas
+ */
 
+use Ikarus\Logic\Data\ProjectData;
+use Ikarus\Logic\Engine;
+use Ikarus\Logic\Model\Component\ExecutableNodeComponent;
+use Ikarus\Logic\Model\Component\Socket\ExposedInputComponent;
+use Ikarus\Logic\Model\DataModel;
+use Ikarus\Logic\Model\Package\BasicTypesPackage;
+use Ikarus\Logic\Model\PriorityComponentModel;
+use Ikarus\Logic\ValueProvider\ValueProvider;
+use PHPUnit\Framework\TestCase;
 
-use Ikarus\Logic\Model\Component\NodeComponentInterface;
-
-interface JumpInSceneNodeComponentInterface extends NodeComponentInterface
+class GatewayTest extends TestCase
 {
-    const ATTRIBUTE_TARGET_SCENE_ID = 'scene';
+    protected function makeEngine($cModel, $dataModel): Engine {
+        $dd = new ProjectData($dataModel);
+        $engine = new Engine($cModel);
+        $engine->bindData($dd);
+        return $engine;
+    }
+
+    public function testSimpleGateway() {
+        $engine = $this->makeEngine(
+            (new PriorityComponentModel())
+            ->addPackage(new BasicTypesPackage())
+            ->addComponent(new ExecutableNodeComponent("OUT2", [
+                new ExposedInputComponent('input1', 'Any'),
+                new ExposedInputComponent('input2', 'Any')
+            ]))
+                ->addComponent(new ExecutableNodeComponent("IN", [
+                    new ExposedInputComponent('output', 'Number')
+                ]))
+            ,
+            (new DataModel())
+            ->addScene("A")
+            ->addNode('out', 'OUT2', 'A')
+        );
+
+        $engine->activate();
+
+        $vp = new ValueProvider();
+        $vp->addValue(23, 'output', 'in1');
+        $vp->addValue(44, 'output', 'in2');
 
 
+        print_r($engine->updateNode("out", $vp));
+    }
 }

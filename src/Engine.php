@@ -173,16 +173,14 @@ class Engine implements EngineInterface
      * If an exposed socket matches the passed $exposedSocketKey the engine will update the node and fetch the exposed value.
      * Fetching a value increases the render cycle.
      * So if you want to fetch several values at one time, begin a render cycle before and end it after! (Much better performance).
-     * Setting $returnAll to true, returns all exposed values from node.
      *
      * @param string|int $nodeIdentifier
      * @param string $exposedSocketKey
      * @param ValueProviderInterface|null $valueProvider
-     * @param bool $returnAll
-     * @param null $errors
+     * @param null|Throwable $error
      * @return mixed|array
      */
-    public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL, bool $returnAll = false, &$errors = NULL)
+    public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL, &$error = NULL)
     {
         if(!$this->isActive()) {
             trigger_error("Engine is not active", E_USER_ERROR);
@@ -196,11 +194,11 @@ class Engine implements EngineInterface
                 $sf->valueProvider = $valueProvider;
                 $this->context->pushStackFrame($sf);
 
-                $this->updateNode($nodeIdentifier, $exposedSocketKey);
+                $this->_updateNode($nodeIdentifier, $exposedSocketKey);
 
-                return $returnAll ? $sf->cachedExposedValues : ($sf->cachedExposedValues["$nodeIdentifier:$exposedSocketKey"] ?? NULL);
+                return $sf->cachedExposedValues[$nodeIdentifier][$exposedSocketKey] ?? NULL;
             } catch (Throwable $exception) {
-                $errors[] = $exception;
+                $error = $exception;
                 return NULL;
             } finally {
                 $this->context->popStackFrame();
@@ -209,6 +207,39 @@ class Engine implements EngineInterface
         }
         trigger_error("Socket $exposedSocketKey of node $nodeIdentifier does not exist", E_USER_WARNING);
         return NULL;
+    }
+
+    /**
+     *  If you want all exposed values of a node, use this method instead of requestValue.
+     *
+     * @param $nodeIdentifier
+     * @param ValueProviderInterface $valueProvider
+     * @param null|Throwable $error
+     * @return array|null
+     */
+    public function updateNode($nodeIdentifier, ValueProviderInterface $valueProvider, &$error = NULL) {
+        if(!$this->isActive()) {
+            trigger_error("Engine is not active", E_USER_ERROR);
+            return NULL;
+        }
+
+        try {
+            $this->beginRenderCycle();
+
+            $sf = new _PermeableStackFrame();
+            $sf->valueProvider = $valueProvider;
+            $this->context->pushStackFrame($sf);
+
+            $this->_updateNode($nodeIdentifier, NULL);
+
+            return $sf->cachedExposedValues[$nodeIdentifier] ?? NULL;
+        } catch (Throwable $exception) {
+            $error = $exception;
+            return NULL;
+        } finally {
+            $this->context->popStackFrame();
+            $this->endRenderCycle();
+        }
     }
 
 
@@ -241,7 +272,7 @@ class Engine implements EngineInterface
                     if($sf->hasOutputValue($destSock, $destNode)) {
                         $setValue( $sf->getOutputValue($destSock, $destNode) );
                     } else {
-                        $this->updateNode($destNode, $destSock);
+                        $this->_updateNode($destNode, $destSock);
                         if($sf->hasOutputValue($destSock, $destNode)) {
                             $setValue( $sf->getOutputValue($destSock, $destNode) );
                         } elseif($valueProvider) {
@@ -277,10 +308,10 @@ class Engine implements EngineInterface
     /**
      * @param $nodeIdentifier
      * @param $socketName
-     * @param bool $exposed
      * @throws Throwable
+     * @internal
      */
-    private function updateNode($nodeIdentifier, $socketName) {
+    private function _updateNode($nodeIdentifier, $socketName) {
         $nodeInfo = $this->_X["nd"][$nodeIdentifier];
 
         if($this->context->needsUpdate( $nodeIdentifier, $componentName = $nodeInfo["c"] )) {

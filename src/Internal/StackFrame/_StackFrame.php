@@ -93,7 +93,7 @@ class _StackFrame
     }
 
     protected function putExposedValue($socketName, $value, $nodeID) {
-        $this->cachedExposedValues["$nodeID:$socketName"] = $value;
+        $this->cachedExposedValues[$nodeID][$socketName] = $value;
     }
 
     protected function putExposedSignal($socketName, $nodeID) {
@@ -162,13 +162,13 @@ class _StackFrame
     public function hasExposedValue($socketName, $nodeIdentifier = NULL) {
         if(!$nodeIdentifier)
             $nodeIdentifier = $this->getCycle()->nodeIdentifier;
-        return isset($this->cachedExposedValues["$nodeIdentifier:$socketName"]);
+        return isset($this->cachedExposedValues[$nodeIdentifier][$socketName]);
     }
 
     public function getExposedValue($socketName, $nodeIdentifier = NULL) {
         if(!$nodeIdentifier)
             $nodeIdentifier = $this->getCycle()->nodeIdentifier;
-        return $this->cachedExposedValues["$nodeIdentifier:$socketName"] ?? NULL;
+        return $this->cachedExposedValues[$nodeIdentifier][$socketName] ?? NULL;
     }
 
     public function hasOutputValue($socketName, $nodeIdentifier = NULL) {
