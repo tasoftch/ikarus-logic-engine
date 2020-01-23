@@ -39,12 +39,15 @@
  * Created on 2020-01-17 17:18 by thomas
  */
 
+use Ikarus\Logic\Component\SceneGatewayComponent;
 use Ikarus\Logic\Data\ProjectData;
 use Ikarus\Logic\Engine;
 use Ikarus\Logic\Model\Component\ExecutableNodeComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedInputComponent;
+use Ikarus\Logic\Model\Data\Scene\AttributedSceneDataModelInterface;
 use Ikarus\Logic\Model\DataModel;
 use Ikarus\Logic\Model\Package\BasicTypesPackage;
+use Ikarus\Logic\Model\Package\ExposedSocketsPackage;
 use Ikarus\Logic\Model\PriorityComponentModel;
 use Ikarus\Logic\ValueProvider\ValueProvider;
 use PHPUnit\Framework\TestCase;
@@ -61,27 +64,56 @@ class GatewayTest extends TestCase
     public function testSimpleGateway() {
         $engine = $this->makeEngine(
             (new PriorityComponentModel())
-            ->addPackage(new BasicTypesPackage())
-            ->addComponent(new ExecutableNodeComponent("OUT2", [
-                new ExposedInputComponent('input1', 'Any'),
-                new ExposedInputComponent('input2', 'Any')
-            ]))
-                ->addComponent(new ExecutableNodeComponent("IN", [
-                    new ExposedInputComponent('output', 'Number')
+                ->addPackage(new BasicTypesPackage())
+                ->addComponent(new SceneGatewayComponent())
+                ->addPackage(new ExposedSocketsPackage('Any'))
+                ->addComponent(new ExecutableNodeComponent('OUT', [
+                    new ExposedInputComponent("input1", 'Any'),
+                    new ExposedInputComponent("input2", 'Any')
                 ]))
             ,
             (new DataModel())
-            ->addScene("A")
-            ->addNode('out', 'OUT2', 'A')
+                ->addScene("myScene")
+                ->addNode("node", 'IKARUS.GATEWAY', 'myScene')
+                ->addNode("node2", 'IKARUS.GATEWAY', 'myScene')
+
+                ->addNode("out", "OUT", 'myScene')
+                ->addNode('in1', 'IKARUS.IN.ANY', 'myScene')
+                ->addNode('in2', 'IKARUS.IN.ANY', 'myScene')
+
+                ->addScene("linked", [ AttributedSceneDataModelInterface::ATTR_HIDDEN => 1 ])
+                ->addNode("exp_input", 'IKARUS.IN.ANY', 'linked')
+                ->addNode("exp_output", 'IKARUS.OUT.ANY', 'linked')
+
+                ->connect('node', 'myInput', 'in1', 'output')
+                ->connect('node2', 'myInput', 'in2', 'output')
+
+                ->connect('out', 'input1', 'node', 'myOutput')
+                ->connect('out', 'input2', 'node2', 'myOutput')
+
+                ->connect("exp_output", 'input', 'exp_input', 'output')
+
+                ->pair('linked', 'node', [
+                    'myInput' => 'exp_input.output',
+                    'myOutput' => 'exp_output.input'
+                ])
+                ->pair('linked', 'node2', [
+                    'myInput' => 'exp_input.output',
+                    'myOutput' => 'exp_output.input'
+                ])
         );
 
         $engine->activate();
 
         $vp = new ValueProvider();
+
         $vp->addValue(23, 'output', 'in1');
         $vp->addValue(44, 'output', 'in2');
 
 
-        print_r($engine->updateNode("out", $vp));
+        $this->assertEquals([
+            'input1' => 23,
+            'input2' => 44
+        ], $engine->updateNode("out", $vp));
     }
 }

@@ -35,6 +35,8 @@
 namespace Ikarus\Logic\Internal\StackFrame;
 
 
+use Ikarus\Logic\ValueProvider\ValueProviderInterface;
+
 class _PermeableStackFrame extends _StackFrame
 {
     protected function putOutputValue($socketName, $value, $nodeID)
@@ -118,6 +120,16 @@ class _PermeableStackFrame extends _StackFrame
             if(isset($f->cachedOutputValues["$nodeIdentifier:$socketName"]))
                 return $f->cachedOutputValues["$nodeIdentifier:$socketName"];
         } while($f = $f->parentFrame);
+        return NULL;
+    }
+
+    public function getValueProvider(): ?ValueProviderInterface
+    {
+        if($this->valueProvider)
+            return $this->valueProvider;
+
+        if($this->parentFrame)
+            return $this->parentFrame->getValueProvider();
         return NULL;
     }
 }

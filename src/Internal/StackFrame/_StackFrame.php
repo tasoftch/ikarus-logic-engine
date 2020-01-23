@@ -190,4 +190,13 @@ class _StackFrame
     {
         return $this->valuesServer;
     }
+
+    /**
+     * Gets the currently active value provider
+     *
+     * @return ValueProviderInterface|null
+     */
+    public function getValueProvider(): ?ValueProviderInterface {
+        return $this->valueProvider;
+    }
 }

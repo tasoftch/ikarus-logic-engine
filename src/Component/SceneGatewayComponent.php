@@ -35,7 +35,22 @@
 namespace Ikarus\Logic\Component;
 
 
+use Ikarus\Logic\Component\Socket\InputGatewaySocketComponent;
+use Ikarus\Logic\Component\Socket\OutputGatewaySocketComponent;
+use Ikarus\Logic\Engine;
+use Ikarus\Logic\Internal\_RuntimeContext;
+use Ikarus\Logic\Internal\StackFrame\_StackFrame;
 use Ikarus\Logic\Model\Component\AbstractNodeComponent;
+use Ikarus\Logic\Model\Component\Socket\InputSocketComponentInterface;
+use Ikarus\Logic\Model\Component\Socket\OutputSocketComponentInterface;
+use Ikarus\Logic\Model\Component\Socket\SocketComponentInterface;
+use Ikarus\Logic\Model\Data\Node\NodeDataModelInterface;
+use Ikarus\Logic\Model\Executable\Context\RuntimeContextInterface;
+use Ikarus\Logic\Model\Executable\Context\SignalServerInterface;
+use Ikarus\Logic\Model\Executable\Context\ValuesServerInterface;
+use Ikarus\Logic\Model\Executable\ExecutableExpressionNodeComponentInterface;
+use Ikarus\Logic\Model\Executable\ExecutableSignalTriggerNodeComponentInterface;
+use Ikarus\Logic\ValueProvider\CallbackValueProvider;
 
 /**
  * Use this component to jump from one scene into another inside of a project.
@@ -53,13 +68,98 @@ use Ikarus\Logic\Model\Component\AbstractNodeComponent;
  *      Scene B: Has a node LINK_1 (component "GATEWAY") and a connection to output (OUT_1, which is paired with exposed input of node OUT_1 of scene A)
  *
  * @package Ikarus\Logic\Component
+ * @method _updateNode($n, $s)  // Suppress warnings in this document.
  */
-class SceneGatewayComponent extends AbstractNodeComponent
+final class SceneGatewayComponent extends AbstractNodeComponent implements ExecutableSignalTriggerNodeComponentInterface, ExecutableExpressionNodeComponentInterface
 {
-    final public function getName(): string
+    // The engine gets injected into this component
+    /** @var Engine */
+    private $engine;
+
+    public function getName(): string
     {
         return "IKARUS.GATEWAY";
     }
 
+    /**
+     * This is an internal method called by the connection compiler to resolve scene references.
+     *
+     * @param $name
+     * @param NodeDataModelInterface $node
+     * @param $gateways
+     * @return InputGatewaySocketComponent|OutputGatewaySocketComponent|null
+     * @internal
+     */
+    final public function getDynamicSocket($name, $node, $gateways) {
+        $nid = $node->getIdentifier();
+        if($gateway = $gateways[$nid][$name] ?? NULL) {
+            /**
+             * @var SocketComponentInterface $socket
+             * @var NodeDataModelInterface $nodeComponent
+             */
+            list($socket, $nodeComponent) = $gateway;
 
+            if($socket instanceof InputSocketComponentInterface) {
+                return new InputGatewaySocketComponent($name, $socket, $nodeComponent);
+            } elseif($socket instanceof OutputSocketComponentInterface) {
+                return new OutputGatewaySocketComponent($name, $socket, $nodeComponent);
+            }
+        }
+        return NULL;
+    }
+
+    public function updateNode(ValuesServerInterface $valuesServer, RuntimeContextInterface $context)
+    {
+        $attributes = $context->getNodeAttributes()["gw"] ?? NULL;
+
+        if($attr = $attributes[ $context->getRequestedOutputSocketName() ]) {
+            $dstNode = $attr["dn"];
+            $dstKey = $attr["dk"];
+
+            $sf = new _StackFrame();
+            /** @var _RuntimeContext $context */
+            $currentFrame = $context->getCurrentStackFrame();
+
+            $sf->valueProvider = new CallbackValueProvider(function($socketName, $nodeIdentifier) use ($attributes, $valuesServer, $currentFrame) {
+                if($key = array_search(['dn' => $nodeIdentifier, 'dk' => $socketName], $attributes)) {
+                    return $valuesServer->fetchInputValue($key);
+                }
+                return $currentFrame->getValueProvider() ? $currentFrame->getValueProvider()->getValue($socketName, $nodeIdentifier) : NULL;
+            });
+
+
+            $context->pushStackFrame($sf);
+            $this->engine->beginRenderCycle();
+
+            try {
+                $output = (function($ni, $sck){return$this->_updateNode($ni, $sck);})->bindTo($this->engine, Engine::class)->call($this->engine, $dstNode, $dstKey);
+            } catch (\Throwable $exception) {
+                throw $exception;
+            } finally {
+                $this->engine->endRenderCycle();
+                $context->popStackFrame();
+            }
+            $nodeIdentifier = $context->getNodeIdentifier();
+
+
+            foreach($output as $socket => $value) {
+                if($key = array_search(['dn' => $dstNode, 'dk' => $socket], $attributes)) {
+                    $currentFrame->cachedOutputValues["$nodeIdentifier:$key"] = $value;
+                }
+            }
+        }
+    }
+
+    public function handleSignalTrigger(string $onInputSocketName, SignalServerInterface $signalServer, RuntimeContextInterface $context)
+    {
+
+    }
+
+    /**
+     * @return Engine|null
+     */
+    public function getEngine(): ?Engine
+    {
+        return $this->engine;
+    }
 }

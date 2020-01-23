@@ -35,11 +35,13 @@
 namespace Ikarus\Logic;
 
 
+use Ikarus\Logic\Component\SceneGatewayComponent;
 use Ikarus\Logic\Data\DataInterface;
 use Ikarus\Logic\Exception\ImmutableEngineException;
 use Ikarus\Logic\Internal\_ExposedSocketResolver;
 use Ikarus\Logic\Internal\_RuntimeContext;
 use Ikarus\Logic\Internal\StackFrame\_PermeableStackFrame;
+use Ikarus\Logic\Internal\StackFrame\_StackFrame;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\Model\Component\Socket\AbstractSocketComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedSocketComponentInterface;
@@ -230,9 +232,7 @@ class Engine implements EngineInterface
             $sf->valueProvider = $valueProvider;
             $this->context->pushStackFrame($sf);
 
-            $this->_updateNode($nodeIdentifier, NULL);
-
-            return $sf->cachedExposedValues[$nodeIdentifier] ?? NULL;
+            return $this->_updateNode($nodeIdentifier, NULL);
         } catch (Throwable $exception) {
             $error = $exception;
             return NULL;
@@ -243,16 +243,19 @@ class Engine implements EngineInterface
     }
 
 
-    private function makeInputValueFetchCallback($nodeIdentifier, ValueProviderInterface $valueProvider = NULL) {
+    private function makeInputValueFetchCallback($nodeIdentifier, _StackFrame $stackFrame) {
         $nodeInfo = $this->_X["nd"][$nodeIdentifier];
         /** @var ExecutableExpressionNodeComponentInterface $component */
         $component = $this->getModel()->getComponent($nodeInfo["c"]);
 
-        return function($socketName) use ($nodeIdentifier, $component, $valueProvider) {
+        return function($socketName) use ($nodeIdentifier, $component, $stackFrame) {
             // Check, if node has connection
             if($cinfo = $this->_X['i2o']["$nodeIdentifier:$socketName"] ?? NULL) {
                 $value = NULL;
-                $mpl = $component->getInputSockets()[$socketName]->allowsMultiple();
+                if(!isset($component->getInputSockets()[$socketName])) {
+                    $mpl = count($cinfo) > 1 ? true : false;
+                } else
+                    $mpl = $component->getInputSockets()[$socketName]->allowsMultiple();
 
                 $setValue = function($v) use (&$value, $mpl) {
                     if($mpl)
@@ -267,16 +270,14 @@ class Engine implements EngineInterface
                     $destNode = $c["dn"];
                     $destSock = $c["dk"];
 
-                    $sf = $this->context->getCurrentStackFrame();
-
-                    if($sf->hasOutputValue($destSock, $destNode)) {
-                        $setValue( $sf->getOutputValue($destSock, $destNode) );
+                    if($stackFrame->hasOutputValue($destSock, $destNode)) {
+                        $setValue( $stackFrame->getOutputValue($destSock, $destNode) );
                     } else {
                         $this->_updateNode($destNode, $destSock);
-                        if($sf->hasOutputValue($destSock, $destNode)) {
-                            $setValue( $sf->getOutputValue($destSock, $destNode) );
-                        } elseif($valueProvider) {
-                            $setValue( $valueProvider->getValue($destSock, $destNode) );
+                        if($stackFrame->hasOutputValue($destSock, $destNode)) {
+                            $setValue( $stackFrame->getOutputValue($destSock, $destNode) );
+                        } elseif($vp = $stackFrame->getValueProvider()) {
+                            $setValue( $vp->getValue($destSock, $destNode) );
                         }
                     }
 
@@ -287,8 +288,8 @@ class Engine implements EngineInterface
 
             $socket = $component->getInputSockets()[$socketName] ?? $component->getOutputSockets()[$socketName] ?? NULL;
             if($socket instanceof ExposedSocketComponentInterface) {
-                if($valueProvider)
-                    return $valueProvider->getValue($socketName, $nodeIdentifier);
+                if($vp = $stackFrame->getValueProvider())
+                    return $vp->getValue($socketName, $nodeIdentifier);
             }
 
             // If there is no connection, get from node attributes
@@ -317,6 +318,9 @@ class Engine implements EngineInterface
         if($this->context->needsUpdate( $nodeIdentifier, $componentName = $nodeInfo["c"] )) {
             /** @var ExecutableExpressionNodeComponentInterface $component */
             $component = $this->getModel()->getComponent($componentName);
+            if($component instanceof SceneGatewayComponent && $this !== $component->getEngine()) {
+                (function($e){$this->engine=$e;})->bindTo($component, SceneGatewayComponent::class)->call($component, $this);
+            }
 
             $sf = $this->context->getCurrentStackFrame();
             $sf->pushCycle(
@@ -325,7 +329,7 @@ class Engine implements EngineInterface
                 $componentName,
                 $socketName,
                 NULL,
-                $this->makeInputValueFetchCallback($nodeIdentifier, $sf->valueProvider)
+                $this->makeInputValueFetchCallback($nodeIdentifier, $sf)
             );
 
             try {
@@ -339,12 +343,14 @@ class Engine implements EngineInterface
                 $component->updateNode($this->context->getCurrentStackFrame()->getValuesServer(), $this->context);
 
                 $recursionCounter--;
+                return $sf->cachedExposedValues[$nodeIdentifier] ?? NULL;
             } catch (Throwable $exception) {
                 throw $exception;
             } finally {
                 $sf->popCycle();
             }
         }
+        return NULL;
     }
 
     /**
@@ -389,7 +395,7 @@ class Engine implements EngineInterface
                     $component->getName(),
                     NULL,
                     $connection["dk"],
-                    $this->makeInputValueFetchCallback($nodeID, $sf->valueProvider),
+                    $this->makeInputValueFetchCallback($nodeID, $sf),
                     function($socketName) use (&$nextNodes, $nodeID) {
                         $nextNodes = array_merge($nextNodes, $this->_getNextNodes([$nodeID], $socketName));
                     }
