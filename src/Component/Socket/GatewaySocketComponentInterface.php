@@ -35,8 +35,19 @@
 namespace Ikarus\Logic\Component\Socket;
 
 
+use Ikarus\Logic\Model\Component\Socket\InputSocketComponentInterface;
 use Ikarus\Logic\Model\Component\Socket\SocketComponentInterface;
+use Ikarus\Logic\Model\Data\Node\NodeDataModelInterface;
 
 interface GatewaySocketComponentInterface extends SocketComponentInterface
 {
+    /**
+     * @return InputSocketComponentInterface
+     */
+    public function getTargetSocket(): InputSocketComponentInterface;
+
+    /**
+     * @return NodeDataModelInterface
+     */
+    public function getNodeDataModel(): NodeDataModelInterface;
 }
