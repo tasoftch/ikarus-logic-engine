@@ -44,8 +44,11 @@ use Ikarus\Logic\Data\ProjectData;
 use Ikarus\Logic\Engine;
 use Ikarus\Logic\Model\Component\ExecutableNodeComponent;
 use Ikarus\Logic\Model\Component\Socket\ExposedInputComponent;
+use Ikarus\Logic\Model\Component\Socket\ExposedOutputComponent;
 use Ikarus\Logic\Model\Data\Scene\AttributedSceneDataModelInterface;
 use Ikarus\Logic\Model\DataModel;
+use Ikarus\Logic\Model\Executable\Context\RuntimeContextInterface;
+use Ikarus\Logic\Model\Executable\Context\SignalServerInterface;
 use Ikarus\Logic\Model\Package\BasicTypesPackage;
 use Ikarus\Logic\Model\Package\ExposedSocketsPackage;
 use Ikarus\Logic\Model\PriorityComponentModel;
@@ -115,5 +118,59 @@ class GatewayTest extends TestCase
             'input1' => 23,
             'input2' => 44
         ], $engine->updateNode("out", $vp));
+    }
+
+    public function testSignalGateway() {
+        $engine = $this->makeEngine(
+            (new PriorityComponentModel())
+                ->addPackage(new BasicTypesPackage())
+                ->addComponent(new SceneGatewayComponent())
+                ->addPackage(new ExposedSocketsPackage('Signal', 'Any'))
+                ->addComponent(new ExecutableNodeComponent('EVENT', [
+                    new ExposedOutputComponent("buttonPressed", 'Signal'),
+                    new ExposedOutputComponent("buttonReleased", 'Signal')
+                ])
+                )
+                ->addComponent((new ExecutableNodeComponent('SIG_OUT', [
+                    new ExposedInputComponent("signal", 'Signal'),
+                    new ExposedInputComponent("value", 'Any')
+                ]))
+                    ->setSignalHandler(function($socket, SignalServerInterface $server) {
+                        $value = $server->fetchInputValue('value');
+                        $server->exposeValue('value', $value);
+                        $server->exposeSignal($socket);
+                    })
+                )
+            ,
+            (new DataModel())
+                ->addScene("myScene")
+                ->addNode("start", 'EVENT', 'myScene')
+                ->addNode("linker", 'IKARUS.GATEWAY', 'myScene')
+                ->addNode('sigOut', 'SIG_OUT', 'myScene')
+                ->addNode('in', 'IKARUS.IN.ANY', 'myScene')
+
+                ->connect('linker', 'testIn1', 'start', 'buttonPressed')
+                ->connect('linker', 'testIn2', 'start', 'buttonReleased')
+                ->connect('sigOut', 'signal', 'linker', 'heheSignal')
+                ->connect('sigOut', 'value', 'in', 'output')
+
+
+                ->addScene("linked", [ AttributedSceneDataModelInterface::ATTR_HIDDEN => 1 ])
+                ->addNode('entry', 'IKARUS.IN.SIGNAL', 'linked')
+                ->addNode('exit', 'IKARUS.OUT.SIGNAL', 'linked')
+
+                ->connect('exit', 'input', 'entry', 'output')
+
+                ->pair('linked', 'linker', [
+                    'testIn1' => 'entry.output',
+                    'testIn2' => 'entry.output',
+                    'heheSignal' => 'exit.input'
+                ])
+        );
+
+        $engine->activate();
+
+        $result = $engine->triggerSignal('buttonPressed', NULL, 'start');
+        print_r($result);
     }
 }

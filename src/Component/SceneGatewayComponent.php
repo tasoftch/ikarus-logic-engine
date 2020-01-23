@@ -51,6 +51,7 @@ use Ikarus\Logic\Model\Executable\Context\ValuesServerInterface;
 use Ikarus\Logic\Model\Executable\ExecutableExpressionNodeComponentInterface;
 use Ikarus\Logic\Model\Executable\ExecutableSignalTriggerNodeComponentInterface;
 use Ikarus\Logic\ValueProvider\CallbackValueProvider;
+use Throwable;
 
 /**
  * Use this component to jump from one scene into another inside of a project.
@@ -133,7 +134,7 @@ final class SceneGatewayComponent extends AbstractNodeComponent implements Execu
 
             try {
                 $output = (function($ni, $sck){return$this->_updateNode($ni, $sck);})->bindTo($this->engine, Engine::class)->call($this->engine, $dstNode, $dstKey);
-            } catch (\Throwable $exception) {
+            } catch (Throwable $exception) {
                 throw $exception;
             } finally {
                 $this->engine->endRenderCycle();
@@ -152,7 +153,47 @@ final class SceneGatewayComponent extends AbstractNodeComponent implements Execu
 
     public function handleSignalTrigger(string $onInputSocketName, SignalServerInterface $signalServer, RuntimeContextInterface $context)
     {
+        $attributes = $context->getNodeAttributes()["gw"] ?? NULL;
+        if($attr = $attributes[$onInputSocketName]) {
+            $dstNode = $attr["dn"];
+            $dstKey = $attr["dk"];
 
+            $sf = new _StackFrame();
+            /** @var _RuntimeContext $context */
+            $currentFrame = $context->getCurrentStackFrame();
+            $sf->valueProvider = new CallbackValueProvider(function($socketName, $nodeIdentifier) use ($attributes, $signalServer, $currentFrame) {
+                if($key = array_search(['dn' => $nodeIdentifier, 'dk' => $socketName], $attributes)) {
+                    return $signalServer->fetchInputValue($key);
+                }
+                return $currentFrame->getValueProvider() ? $currentFrame->getValueProvider()->getValue($socketName, $nodeIdentifier) : NULL;
+            });
+
+            $context->pushStackFrame($sf);
+            $this->engine->beginRenderCycle();
+
+            try {
+                $output = $this->engine->triggerSignal($dstKey, NULL, $dstNode, NULL);
+            } catch (Throwable $exception) {
+                throw $exception;
+            } finally {
+                $this->engine->endRenderCycle();
+                $context->popStackFrame();
+            }
+
+            foreach($output->getExposedSignals() as $signal) {
+                list($nid, $socket) = $signal;
+                if($key = array_search(['dn' => $nid, 'dk' => $socket], $attributes)) {
+                    $signalServer->forwardSignal($key);
+                }
+            }
+
+            $nodeIdentifier = $context->getNodeIdentifier();
+            foreach($output->getExposedValues() as $socket => $value) {
+                if($key = array_search(['dn' => $dstNode, 'dk' => $socket], $attributes)) {
+                    $currentFrame->cachedOutputValues["$nodeIdentifier:$key"] = $value;
+                }
+            }
+        }
     }
 
     /**

@@ -386,6 +386,9 @@ class Engine implements EngineInterface
 
                 $nodeInfo = $this->_X["nd"][$nodeID];
                 $component = $this->getModel()->getComponent( $nodeInfo["c"] );
+                if($component instanceof SceneGatewayComponent && $this !== $component->getEngine()) {
+                    (function($e){$this->engine=$e;})->bindTo($component, SceneGatewayComponent::class)->call($component, $this);
+                }
 
                 $sf = $this->context->getCurrentStackFrame();
 
@@ -453,7 +456,7 @@ class Engine implements EngineInterface
                 }
             }
 
-            return $sf->cachedExposedSignals;
+            return new TriggerResult($sf->cachedExposedSignals?:[], $sf->cachedExposedValues?:[]);
         } catch (Throwable $throwable) {
         } finally {
             $this->context->popStackFrame();
