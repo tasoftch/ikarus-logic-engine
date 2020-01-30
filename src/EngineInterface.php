@@ -42,13 +42,11 @@ use Ikarus\Logic\ValueProvider\ValueProviderInterface;
 interface EngineInterface
 {
     /**
-     * EngineInterface constructor.
+     * Gets the used component model
      *
-     * The engine must be informed on instantiation about the component model used.
-     *
-     * @param ComponentModelInterface $componentModel
+     * @return ComponentModelInterface
      */
-    public function __construct(ComponentModelInterface $componentModel);
+    public function getModel(): ComponentModelInterface;
 
     /**
      * Binds the given data to the engine.

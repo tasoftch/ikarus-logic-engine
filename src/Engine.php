@@ -70,6 +70,9 @@ class Engine implements EngineInterface
 
     /**
      * Engine constructor.
+     *
+     * The engine must be informed on instantiation about the component model used.
+     *
      * @param ComponentModelInterface $componentModel
      */
     public function __construct(ComponentModelInterface $componentModel)
