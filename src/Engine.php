@@ -35,6 +35,7 @@
 namespace Ikarus\Logic;
 
 
+use Ikarus\Logic\Component\EngineDependentComponentInterface;
 use Ikarus\Logic\Component\SceneGatewayComponent;
 use Ikarus\Logic\Data\DataInterface;
 use Ikarus\Logic\Exception\ImmutableEngineException;
@@ -312,6 +313,7 @@ class Engine implements EngineInterface
     /**
      * @param $nodeIdentifier
      * @param $socketName
+     * @return mixed|null
      * @throws Throwable
      * @internal
      */
@@ -321,8 +323,8 @@ class Engine implements EngineInterface
         if($this->context->needsUpdate( $nodeIdentifier, $componentName = $nodeInfo["c"] )) {
             /** @var ExecutableExpressionNodeComponentInterface $component */
             $component = $this->getModel()->getComponent($componentName);
-            if($component instanceof SceneGatewayComponent && $this !== $component->getEngine()) {
-                (function($e){$this->engine=$e;})->bindTo($component, SceneGatewayComponent::class)->call($component, $this);
+            if($component instanceof EngineDependentComponentInterface && $this !== $component->getEngine()) {
+                $component->setEngine($this);
             }
 
             $sf = $this->context->getCurrentStackFrame();

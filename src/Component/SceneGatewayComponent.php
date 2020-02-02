@@ -38,6 +38,7 @@ namespace Ikarus\Logic\Component;
 use Ikarus\Logic\Component\Socket\InputGatewaySocketComponent;
 use Ikarus\Logic\Component\Socket\OutputGatewaySocketComponent;
 use Ikarus\Logic\Engine;
+use Ikarus\Logic\EngineInterface;
 use Ikarus\Logic\Internal\_RuntimeContext;
 use Ikarus\Logic\Internal\StackFrame\_StackFrame;
 use Ikarus\Logic\Model\Component\AbstractNodeComponent;
@@ -71,10 +72,10 @@ use Throwable;
  * @package Ikarus\Logic\Component
  * @method _updateNode($n, $s)  // Suppress warnings in this document.
  */
-final class SceneGatewayComponent extends AbstractNodeComponent implements ExecutableSignalTriggerNodeComponentInterface, ExecutableExpressionNodeComponentInterface
+final class SceneGatewayComponent extends AbstractNodeComponent implements ExecutableSignalTriggerNodeComponentInterface, ExecutableExpressionNodeComponentInterface, EngineDependentComponentInterface
 {
     // The engine gets injected into this component
-    /** @var Engine */
+    /** @var EngineInterface */
     private $engine;
 
     public function getName(): string
@@ -199,8 +200,13 @@ final class SceneGatewayComponent extends AbstractNodeComponent implements Execu
     /**
      * @return Engine|null
      */
-    public function getEngine(): ?Engine
+    public function getEngine(): EngineInterface
     {
         return $this->engine;
+    }
+
+    public function setEngine(EngineInterface $engine)
+    {
+        $this->engine = $engine;
     }
 }

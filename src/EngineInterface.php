@@ -132,7 +132,7 @@ interface EngineInterface
      * @param string $exposedSocketKey
      * @param string|int|null $nodeIdentifier
      * @param ValueProviderInterface|null $valueProvider
-     * @return array    Reached exposed input signals
+     * @return TriggerResult
      */
     public function triggerSignal(string $exposedSocketKey, string $componentName = NULL, $nodeIdentifier = NULL, ValueProviderInterface $valueProvider = NULL);
 }
