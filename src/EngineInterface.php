@@ -38,6 +38,7 @@ namespace Ikarus\Logic;
 use Ikarus\Logic\Data\DataInterface;
 use Ikarus\Logic\Model\Component\ComponentModelInterface;
 use Ikarus\Logic\ValueProvider\ValueProviderInterface;
+use Throwable;
 
 interface EngineInterface
 {
@@ -121,6 +122,17 @@ interface EngineInterface
      * @return mixed
      */
     public function requestValue($nodeIdentifier, string $exposedSocketKey, ValueProviderInterface $valueProvider = NULL);
+
+    /**
+     *  If you want all exposed values of a node, use this method instead of requestValue.
+     * This method returns a list with all exposed values.
+     *
+     * @param $nodeIdentifier
+     * @param ValueProviderInterface $valueProvider
+     * @param null|Throwable $error
+     * @return array|null
+     */
+    public function updateNode($nodeIdentifier, ValueProviderInterface $valueProvider, &$error = NULL);
 
     /**
      * Calling this method triggers a signal in the logic.

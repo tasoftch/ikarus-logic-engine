@@ -216,12 +216,7 @@ class Engine implements EngineInterface
     }
 
     /**
-     *  If you want all exposed values of a node, use this method instead of requestValue.
-     *
-     * @param $nodeIdentifier
-     * @param ValueProviderInterface $valueProvider
-     * @param null|Throwable $error
-     * @return array|null
+     * @inheritDoc
      */
     public function updateNode($nodeIdentifier, ValueProviderInterface $valueProvider, &$error = NULL) {
         if(!$this->isActive()) {
